@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'providers/product_provider.dart';
+import 'screens/cesta_screen.dart';
 import 'screens/home_screen.dart';
 
 void main() {
@@ -32,7 +33,11 @@ class MyApp extends StatelessWidget {
                 TextStyle(fontSize: 16.0), // Usar la nomenclatura correcta
           ),
         ),
-        home: const HomeScreen(),
+        initialRoute: '/home', // Ruta inicial
+        routes: {
+          '/home': (context) => const HomeScreen(), // Pantalla principal
+          '/cesta': (context) => const CestaScreen(), // Pantalla de la cesta
+        },
       ),
     );
   }
