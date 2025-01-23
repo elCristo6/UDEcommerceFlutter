@@ -328,12 +328,12 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
               decoration: const BoxDecoration(
                 border: Border(
                   // Borde blanco
-                  right: BorderSide(color: Colors.white, width: 0.2),
+                  right: BorderSide(color: Colors.white, width: 0.1),
                 ),
               ),
               alignment: Alignment.center,
               child: Image.asset(
-                'assets/UDLogo.png', // Asegúrate de que la ruta es correcta
+                'assets/Logo2025-1.png', // Asegúrate de que la ruta es correcta
                 fit: BoxFit.contain,
               ),
             ),
@@ -537,7 +537,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                 const Divider(color: Colors.white, thickness: 1.7),
                 // Segunda fila: Menú
                 const Padding(
-                  padding: EdgeInsets.only(left: 10.0, right: 10.0, top: 0.0),
+                  padding: EdgeInsets.only(left: 8.0, right: 8.0, top: 0.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
                     children: [
@@ -545,7 +545,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Ofertas',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -553,7 +553,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Novedades',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -561,7 +561,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Servicios',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -569,7 +569,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Robótica',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -577,7 +577,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Kits Educativos',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -585,7 +585,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Amplificadores',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
@@ -593,15 +593,15 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                         'Impresión 3D',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),
                       Text(
-                        'VENTAS',
+                        'Ventas',
                         style: TextStyle(
                             color: Colors.white,
-                            fontSize: 22.5, // Ajuste del tamaño
+                            fontSize: 20, // Ajuste del tamaño
                             fontFamily: 'Roboto',
                             fontWeight: FontWeight.w500),
                       ),

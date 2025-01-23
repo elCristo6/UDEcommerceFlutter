@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
 import 'screens/cesta_screen.dart';
 import 'screens/home_screen.dart';
@@ -18,9 +19,10 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(
             create: (context) => ProductProvider()..fetchProducts()),
+        ChangeNotifierProvider(create: (_) => InvoiceProvider()),
       ],
       child: MaterialApp(
-        title: 'Ecommerce App',
+        title: 'UD Electronics',
         theme: ThemeData(
           primarySwatch: Colors.deepPurple,
           visualDensity: VisualDensity.adaptivePlatformDensity,
