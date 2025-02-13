@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
 class ImageCarousel extends StatefulWidget {
+  const ImageCarousel({super.key});
+
   @override
+  // ignore: library_private_types_in_public_api
   _ImageCarouselState createState() => _ImageCarouselState();
 }
 
@@ -10,7 +13,8 @@ class _ImageCarouselState extends State<ImageCarousel> {
   int _currentPage = 0;
 
   final List<String> _images = [
-    'assets/5.png',
+    'assets/7.png',
+    'assets/6.png',
     'assets/2.png',
     'assets/3.png',
     'assets/4.png',
@@ -20,7 +24,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
   void initState() {
     super.initState();
     // Configura el cambio automático de imágenes
-    Future.delayed(const Duration(seconds: 5), _autoChange);
+    Future.delayed(const Duration(seconds: 10), _autoChange);
   }
 
   void _autoChange() {
@@ -33,7 +37,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
       );
-      Future.delayed(const Duration(seconds: 3), _autoChange);
+      Future.delayed(const Duration(seconds: 10), _autoChange);
     }
   }
 
@@ -70,7 +74,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
 
     return Column(
       children: [
-        Container(
+        SizedBox(
           height: screenHeight * 0.3, // Altura del carrusel
           width: screenWidth, // Ancho completo
           child: Stack(

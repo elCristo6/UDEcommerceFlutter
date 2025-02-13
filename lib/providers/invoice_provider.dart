@@ -1,186 +1,37 @@
-/*import 'dart:convert';
-
-import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-
-import '../models/invoice_model.dart';
-import '../models/product_model.dart';
-import '../models/user_model.dart';
-
-class InvoiceProvider with ChangeNotifier {
-  final String _baseUrl = "http://34.226.208.66:3001/api/newBill";
-  List<Invoice> _invoices = [];
-  Invoice? _currentInvoice;
-  User? _currentUser;
-  List<Product> _selectedProducts = [];
-  String _userName = '';
-  String _userCC = '';
-  double _pagaCon = 0.0;
-  double _cambio = 0.0;
-  String _medioPago = 'Efectivo';
-
-  List<Invoice> get invoices => _invoices;
-  Invoice? get currentInvoice => _currentInvoice;
-  User? get currentUser => _currentUser;
-  List<Product> get selectedProducts => _selectedProducts;
-  String get userName => _userName;
-  String get userCC => _userCC;
-  double get pagaCon => _pagaCon;
-  double get cambio => _cambio;
-  String get medioPago => _medioPago;
-
-  // Métodos para configurar usuario y sus datos
-  void setUser(User user) {
-    _currentUser = user;
-    notifyListeners();
-  }
-
-  void setUserName(String name) {
-    _userName = name;
-    notifyListeners();
-  }
-
-  void setUserCC(String cc) {
-    _userCC = cc;
-    notifyListeners();
-  }
-
-  void setPagaCon(double amount) {
-    _pagaCon = amount;
-    _cambio = _pagaCon - selectedTotal;
-    notifyListeners();
-  }
-
-  void setMedioPago(String medio) {
-    _medioPago = medio;
-    notifyListeners();
-  }
-
-  // Métodos para manejar productos seleccionados
-  void addProduct(Product product) {
-    if (!_selectedProducts.contains(product)) {
-      _selectedProducts.add(product);
-    }
-    notifyListeners();
-  }
-
-  void removeProduct(Product product) {
-    _selectedProducts.remove(product);
-    notifyListeners();
-  }
-
-  void clearProducts() {
-    _selectedProducts.clear();
-    notifyListeners();
-  }
-
-  // Calcular el total de productos seleccionados
-  double get selectedTotal {
-    return _selectedProducts.fold(
-      0.0,
-      (sum, product) =>
-          sum + (product.price * (product.stock)), // Basado en el stock
-    );
-  }
-
-  // Crear una factura y enviarla al servidor
-  Future<void> createInvoice() async {
-    if (_selectedProducts.isEmpty) {
-      throw Exception("No hay productos seleccionados.");
-    }
-
-    final invoiceData = {
-      "userName": _userName.isEmpty ? null : _userName, // Opcional
-      "userPhone": currentUser?.phone ?? '',
-      "userEmail": currentUser?.email ?? '',
-      "userCC": _userCC.isEmpty ? null : _userCC, // Opcional
-      "userDetalles": "",
-      "products": _selectedProducts
-          .map((product) => {
-                "product": product.id,
-                "quantity": product.stock,
-              })
-          .toList(),
-      "servicio": [],
-      "impresiones": [],
-      "medioPago": _medioPago,
-      "cambio": _cambio,
-      "pagaCon": _pagaCon,
-      "totalAmount": selectedTotal,
-      "consecutivo": _invoices.length + 1,
-    };
-
-    try {
-      final response = await http.post(
-        Uri.parse(_baseUrl),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode(invoiceData),
-      );
-
-      if (response.statusCode == 200) {
-        final responseData = jsonDecode(response.body);
-        final newInvoice = Invoice.fromJson(responseData);
-        _invoices.add(newInvoice);
-        clearProducts();
-        notifyListeners();
-      } else {
-        throw Exception("Error al crear la factura: ${response.body}");
-      }
-    } catch (error) {
-      throw Exception("Error al conectar con el servidor: $error");
-    }
-  }
-}
-*/
-
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
 
+import '../models/invoice_model.dart'; // Modelo de factura
 import '../models/product_model.dart';
-import '../providers/product_provider.dart';
+import '../models/user_model.dart'; // Modelo de usuario
+import '../providers/product_provider.dart'; // Proveedor de productos
+import '../services/pdfService.dart';
 
 class InvoiceProvider with ChangeNotifier {
   final String _baseUrl = "http://34.226.208.66:3001/api/newBill";
-  List<Product> _selectedProducts = [];
-  String _userName = '';
-  String _userCC = '';
-  String _userPhone = '';
-  String _userEmail = '';
+
+  // ================== CAMPOS ==================
+  User? _currentUser;
   String _medioPago = 'Efectivo';
   double _pagaCon = 0.0;
   double _cambio = 0.0;
 
-  // Getters
+  // Lista para almacenar facturas creadas (opcional)
+  final List<Invoice> _invoices = [];
 
-  List<Product> get selectedProducts => _selectedProducts;
-  String get userName => _userName;
-  String get userCC => _userCC;
-  String get userPhone => _userPhone;
-  String get userEmail => _userEmail;
+  // ================== GETTERS ==================
+  User? get currentUser => _currentUser;
   String get medioPago => _medioPago;
   double get pagaCon => _pagaCon;
   double get cambio => _cambio;
+  List<Invoice> get invoices => _invoices;
 
-  // Métodos para configurar usuario y sus datos
-  void setUserName(String name) {
-    _userName = name;
-    notifyListeners();
-  }
-
-  void setUserCC(String cc) {
-    _userCC = cc;
-    notifyListeners();
-  }
-
-  void setUserPhone(String phone) {
-    _userPhone = phone;
-    notifyListeners();
-  }
-
-  void setUserEmail(String email) {
-    _userEmail = email;
+  // ================== SETTERS ==================
+  void setCurrentUser(User user) {
+    _currentUser = user;
     notifyListeners();
   }
 
@@ -189,63 +40,153 @@ class InvoiceProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setPagaCon(double amount) {
+  void setPagaCon(double amount, BuildContext context) {
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
     _pagaCon = amount;
-    _cambio = _pagaCon - selectedTotal;
+    _cambio = _pagaCon - selectedTotal(productProvider);
     notifyListeners();
   }
 
-  // Manejo de productos seleccionados
-  void addProduct(Product product) {
-    if (!_selectedProducts.contains(product)) {
-      _selectedProducts.add(product);
-    }
-    notifyListeners();
-  }
-
-  void removeProduct(Product product) {
-    _selectedProducts.remove(product);
-    notifyListeners();
-  }
-
-  void clearProducts() {
-    _selectedProducts.clear();
-    notifyListeners();
-  }
-
-  // Calcular el total
-  double get selectedTotal {
-    return _selectedProducts.fold(0.0, (sum, product) {
-      final quantity = ProductProvider().quantities[product] ?? 1;
-      return sum + (product.price * quantity);
+  // ================== MÉTODOS AUXILIARES ==================
+  /// Calcula el total basándose en los productos seleccionados y sus precios/cantidades.
+  double selectedTotal(ProductProvider productProvider) {
+    return productProvider.selectedProducts.fold(0.0, (sum, product) {
+      final quantity = productProvider.quantities[product] ?? 1;
+      final price = productProvider.modifiedPrices[product] ?? product.price;
+      return sum + (price * quantity);
     });
   }
 
-  Future<void> createInvoice() async {
-    if (_selectedProducts.isEmpty) {
-      throw Exception("No hay productos seleccionados.");
+  /// Notifica cambios de subtotal para actualizar la UI
+  void updateSubtotal(ProductProvider productProvider) {
+    notifyListeners();
+  }
+
+  // ================== FACTURA LOCAL (SIN SERVIDOR) ==================
+  /// Construye un objeto Invoice en local con todos los datos que el usuario ingresó.
+  Invoice buildLocalInvoice(ProductProvider productProvider) {
+    // Construye la lista de productos con nombre, cantidad y precio actualizados
+    final List<Product> selectedProds =
+        productProvider.selectedProducts.map((product) {
+      final quantity = productProvider.quantities[product] ?? 1;
+      final price = productProvider.modifiedPrices[product] ?? product.price;
+      return Product(
+        id: product.id,
+        name: product.name,
+        price: price,
+        description: product.description,
+        imageUrl: product.imageUrl,
+        stock: product.stock,
+        category: product.category,
+        quantity: quantity,
+      );
+    }).toList();
+
+    // Crea la factura local con todos los datos del usuario y productos seleccionados
+    return Invoice(
+      id: 'local-invoice', // O un ID ficticio/único
+      user: _currentUser, // Datos completos del cliente
+      userId: null, // Si no tienes ID local, pon null
+      products: selectedProds,
+      totalAmount: selectedTotal(productProvider),
+      medioPago: _medioPago,
+      pagaCon: _pagaCon,
+      cambio: _cambio,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  /// Genera el PDF usando la factura local (sin hacer petición al servidor).
+  /// Ideal para COTIZACIONES o pruebas offline.
+  Future<void> generatePdfLocal(BuildContext context,
+      {String docType = 'COTIZACIÓN'}) async {
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
+
+    // Verifica que haya productos seleccionados
+    if (productProvider.selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("No hay productos seleccionados."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
     }
 
-    // Calcular el total basado en las cantidades seleccionadas
-    double totalAmount = _selectedProducts.fold(0.0, (sum, product) {
-      final quantity = ProductProvider().quantities[product] ?? 1;
-      return sum + (product.price * quantity);
-    });
+    // Construye la factura local
+    final Invoice localInvoice = buildLocalInvoice(productProvider);
 
+    // Genera el PDF directamente con los datos locales
+    final pdfService = PDFService();
+    await pdfService.printInvoiceStyled(localInvoice, docType: docType);
+
+    // Si quieres limpiar la selección de productos tras generar el PDF, descomenta:
+    // productProvider.removeSelectedProducts();
+  }
+
+  // ================== FACTURA CON ENVÍO AL SERVIDOR ==================
+  /// Envía la factura al servidor y luego imprime el PDF usando los datos LOCALES
+  /// (para asegurarnos de que no falte nada).
+  Future<void> createInvoice(BuildContext context,
+      {String docType = 'FACTURA DE VENTA'}) async {
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
+
+    // Verifica que haya productos seleccionados
+    if (productProvider.selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("No hay productos seleccionados para facturar."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+/*
+    // Verifica datos básicos de usuario
+    if (_currentUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("Por favor, completa los datos del usuario."),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }*/
+
+    // Construye la lista de productos a enviar al servidor
+    final List<Map<String, dynamic>> productList =
+        productProvider.selectedProducts.map((product) {
+      final quantity = productProvider.quantities[product] ?? 1;
+      final price = productProvider.modifiedPrices[product] ?? product.price;
+      return {
+        "productId": product.id,
+        "name": product.name,
+        "quantity": quantity,
+        "price": price,
+      };
+    }).toList();
+
+    // Datos a enviar en la petición
     final invoiceData = {
-      "name": _userName.isEmpty ? "Cliente" : _userName,
-      "phone": _userPhone.isEmpty ? "No proporcionado" : _userPhone,
-      "email": _userEmail.isEmpty ? "No proporcionado" : _userEmail,
-      "cc": _userCC.isEmpty ? "No proporcionado" : _userCC,
-      "detalles": "Esta es una compra generada por la aplicación",
-      "products": _selectedProducts.map((product) {
-        final quantity = ProductProvider().quantities[product] ?? 1;
-        return {"productId": product.id, "quantity": quantity};
-      }).toList(),
+      "name": _currentUser?.name ?? "Cliente",
+      "phone": _currentUser?.phone ?? "No proporcionado",
+      "email": _currentUser?.email ?? "No proporcionado",
+      "cc": _currentUser?.nit ?? "No proporcionado",
+      "detalles": "Factura generada desde Flutter",
+      "products": productList
+          .map((p) => {
+                "productId": p["productId"],
+                "quantity": p["quantity"],
+              })
+          .toList(),
       "pagaCon": _pagaCon,
       "medioPago": _medioPago,
-      "cambio": _pagaCon - totalAmount,
-      "totalAmount": totalAmount.toInt(),
+      "cambio": _cambio,
+      "totalAmount": selectedTotal(productProvider),
     };
 
     try {
@@ -255,27 +196,67 @@ class InvoiceProvider with ChangeNotifier {
         body: jsonEncode(invoiceData),
       );
 
-      if (response.statusCode == 200) {
-        clearAllData(); // Limpia datos en InvoiceProvider
-        notifyListeners();
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final responseData = jsonDecode(response.body);
+
+        // Opcional: podemos leer lo que devuelva el servidor
+        //           (por si queremos mostrar un ID en consola)
+        final invoiceServer = Invoice.fromJson(responseData['data']);
+        _invoices.add(invoiceServer);
+
+        // Notifica éxito en la UI
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(responseData['message'] ?? "Factura creada exitosamente"),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        print("Factura generada en el servidor:");
+        print(invoiceServer.toJson());
+
+        // Actualiza los productos y su lista filtrada (por si cambió stock)
+        await productProvider.fetchProducts(forceUpdate: true);
+
+        // AHORA generamos el PDF usando NUESTROS DATOS LOCALES
+        // para asegurarnos de que no falte nada.
+        final pdfService = PDFService();
+        final localInvoice = buildLocalInvoice(productProvider);
+        await pdfService.printInvoiceStyled(localInvoice, docType: docType);
+
+        // Limpia los productos seleccionados en el carrito
+        productProvider.removeSelectedProducts();
       } else {
-        throw Exception("Error al crear la factura: ${response.body}");
+        final responseData = jsonDecode(response.body);
+        // ignore: use_build_context_synchronously
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text("Error al crear la factura: ${responseData['message']}"),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     } catch (error) {
-      throw Exception("Error al conectar con el servidor: $error");
+      // ignore: use_build_context_synchronously
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Error al conectar con el servidor: $error"),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
+  // ================== LIMPIAR DATOS ==================
+  /// Limpia todos los datos de la factura
   void clearAllData() {
-    _selectedProducts.clear();
-    _userName = '';
-    _userCC = '';
-    _userPhone = '';
-    _userEmail = '';
+    _currentUser = null;
     _medioPago = 'Efectivo';
     _pagaCon = 0.0;
     _cambio = 0.0;
-    ProductProvider().clearCart(); // Limpia el carrito
     notifyListeners();
   }
 }

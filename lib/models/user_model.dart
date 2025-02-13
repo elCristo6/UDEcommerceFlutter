@@ -22,13 +22,28 @@ class User {
       nit: json['nit'] ?? '',
     );
   }
+  User copyWith({
+    String? id,
+    String? name,
+    String? email,
+    String? phone,
+    String? nit,
+  }) {
+    return User(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phone: phone ?? this.phone,
+      nit: nit ?? this.nit,
+    );
+  }
 
   Map<String, dynamic> toJson() {
     return {
-      '_id': id,
-      'name': name,
+      'id': id.isNotEmpty ? id : "N/A",
+      'name': name.isNotEmpty ? name : "Cliente",
       'email': email,
-      'phoneNumber': phone,
+      'phone': phone,
       'nit': nit,
     };
   }

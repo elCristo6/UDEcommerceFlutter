@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/product_model.dart';
+import '../providers/invoice_provider.dart';
 import '../services/product_service.dart';
 
 class ProductProvider with ChangeNotifier {
@@ -8,15 +9,23 @@ class ProductProvider with ChangeNotifier {
   List<Product> _cart = [];
   List<Product> _selectedProducts = []; // Lista de productos seleccionados
   Map<Product, int> _quantities = {};
+  Map<Product, double> _modifiedPrices = {};
+  Map<Product, TextEditingController> _priceControllers =
+      {}; // 🔹 Mapa para controladores
+
   List<Product> _filteredProducts = [];
   bool _isLoading = false;
+  bool _isFiltering = false;
+  bool _hasFetchedProducts = false;
 
   List<Product> get products => _products;
   List<Product> get cart => _cart;
   List<Product> get selectedProducts => _selectedProducts;
-  List<Product> get filteredProducts => _filteredProducts;
+  List<Product> get filteredProducts =>
+      _isFiltering ? _filteredProducts : _products;
   bool get isLoading => _isLoading;
   final ProductService _productService = ProductService();
+  Map<Product, double> get modifiedPrices => _modifiedPrices;
 
   Map<Product, int> get quantities => _quantities;
 
@@ -28,17 +37,39 @@ class ProductProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  /// Traer productos desde el servicio
-  void fetchProducts() async {
+  void updatePrice(Product product, double newPrice) {
+    _modifiedPrices[product] = newPrice; // Guarda el nuevo precio
+    notifyListeners(); // Notifica a todos los widgets
+  }
+
+  double getProductPrice(Product product) {
+    return _modifiedPrices[product] ?? product.price;
+  }
+
+  TextEditingController getPriceController(Product product) {
+    if (!_priceControllers.containsKey(product)) {
+      _priceControllers[product] =
+          TextEditingController(text: getProductPrice(product).toString());
+    }
+    return _priceControllers[product]!;
+  }
+
+  void clearControllers() {
+    _priceControllers.clear(); //  Limpia los controladores cuando sea necesario
+  }
+
+  Future<void> fetchProducts({bool forceUpdate = false}) async {
+    if (_isLoading || (_hasFetchedProducts && !forceUpdate)) return;
     _isLoading = true;
     notifyListeners();
 
     try {
       List<Product> newProducts = await _productService.getProducts();
       _products = newProducts;
+
+      // Actualiza la lista filtrada con los productos nuevos
       _filteredProducts = _products;
-    } catch (error) {
-      // Handle error
+      _hasFetchedProducts = true;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -47,8 +78,10 @@ class ProductProvider with ChangeNotifier {
 
   void filterProducts(String query) {
     if (query.isEmpty) {
+      _isFiltering = false;
       _filteredProducts = _products;
     } else {
+      _isFiltering = true; // Activa el estado de filtro
       _filteredProducts = _products
           .where((product) =>
               product.name.toLowerCase().contains(query.toLowerCase()))
@@ -58,10 +91,22 @@ class ProductProvider with ChangeNotifier {
   }
 
   void addToCart(Product product) {
-    if (!_cart.contains(product)) {
+    int index = _cart.indexWhere((p) => p.id == product.id);
+
+    if (index != -1) {
+      // Si el producto ya está en el carrito, solo aumenta la cantidad
+      _quantities[product] = (_quantities[product] ?? 1) + 1;
+    } else {
+      // Si no está en el carrito, lo agrega con cantidad 1
       _cart.add(product);
-      _quantities[product] = 1; // Inicializa la cantidad en 1
+      _quantities[product] = 1;
     }
+    notifyListeners(); // Notifica a la UI que hubo cambios
+  }
+
+  void clearFilter() {
+    _isFiltering = false; // Limpia el estado de filtro
+    _filteredProducts = _products; // Restaura la lista completa
     notifyListeners();
   }
 
@@ -117,28 +162,35 @@ class ProductProvider with ChangeNotifier {
     }
   }
 
-  void updateQuantity(Product product, int quantity) {
-    _quantities[product] = quantity;
-    notifyListeners();
+  void updateQuantity(
+      Product product, int newQuantity, InvoiceProvider invoiceProvider) {
+    if (newQuantity > 0 && newQuantity <= product.stock) {
+      _quantities[product] = newQuantity;
+      notifyListeners();
+
+      // Notificar a InvoiceProvider para actualizar el subtotal
+      invoiceProvider.updateSubtotal(this);
+    }
   }
 
   double get selectedTotal {
     return _selectedProducts.fold(0.0, (sum, product) {
       final quantity =
           _quantities[product] ?? 1; // Obtiene la cantidad o 1 por defecto
-      return sum +
-          (product.price *
-              quantity); // Suma el total para cada producto seleccionado
+      final price = _modifiedPrices[product] ?? product.price;
+      return sum + (price * quantity);
     });
   }
 
   void removeSelectedProducts() {
-    for (var product in _selectedProducts) {
-      _cart.remove(product);
-      _quantities.remove(product);
-    }
-    _selectedProducts.clear();
-    notifyListeners();
+    if (_selectedProducts.isEmpty) return;
+
+    _cart.removeWhere((product) => _selectedProducts.contains(product));
+    _quantities
+        .removeWhere((product, _) => _selectedProducts.contains(product));
+
+    _selectedProducts.clear(); // Limpia la lista de seleccionados
+    notifyListeners(); // Asegura que la UI se actualice
   }
 
   Future<void> deleteProduct(String id) async {

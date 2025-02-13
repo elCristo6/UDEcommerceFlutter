@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:input_quantity/input_quantity.dart';
 import 'package:provider/provider.dart';
 
+import '../models/user_model.dart';
 import '../providers/invoice_provider.dart';
 import '../providers/product_provider.dart';
 
 class ProductList extends StatefulWidget {
+  // ignore: use_super_parameters
   const ProductList({Key? key}) : super(key: key);
 
   @override
+  // ignore: library_private_types_in_public_api
   _ProductListState createState() => _ProductListState();
 }
 
@@ -27,12 +30,26 @@ class _ProductListState extends State<ProductList> {
     super.initState();
     _searchFocusNode = FocusNode();
 
-    // Listener para mostrar/ocultar productos al ganar/perder el foco
-    _searchFocusNode.addListener(() {
-      setState(() {
-        _isSearchActive = _searchFocusNode.hasFocus;
-      });
+    // Listener para actualizar productos al obtener foco
+    _searchFocusNode.addListener(() async {
+      if (_searchFocusNode.hasFocus) {
+        final productProvider =
+            Provider.of<ProductProvider>(context, listen: false);
+
+        // Llama a fetchProducts para actualizar la lista
+        await productProvider.fetchProducts(forceUpdate: true);
+      }
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
+    if (!productProvider.isLoading && productProvider.products.isEmpty) {
+      productProvider.fetchProducts();
+    }
   }
 
   @override
@@ -71,11 +88,22 @@ class _ProductListState extends State<ProductList> {
                     Expanded(
                       flex: 2,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        padding: const EdgeInsets.symmetric(horizontal: 3.0),
                         child: TextField(
                           onChanged: (value) {
-                            Provider.of<InvoiceProvider>(context, listen: false)
-                                .setUserName(value);
+                            final invoiceProvider =
+                                Provider.of<InvoiceProvider>(context,
+                                    listen: false);
+                            // Actualiza el nombre del usuario actual
+                            final currentUser = invoiceProvider.currentUser ??
+                                User(
+                                    id: '',
+                                    name: '',
+                                    email: '',
+                                    phone: '',
+                                    nit: '');
+                            invoiceProvider.setCurrentUser(
+                                currentUser.copyWith(name: value));
                           },
                           decoration: InputDecoration(
                             labelText: 'Nombre',
@@ -103,8 +131,18 @@ class _ProductListState extends State<ProductList> {
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         child: TextField(
                           onChanged: (value) {
-                            Provider.of<InvoiceProvider>(context, listen: false)
-                                .setUserCC(value);
+                            final invoiceProvider =
+                                Provider.of<InvoiceProvider>(context,
+                                    listen: false);
+                            final currentUser = invoiceProvider.currentUser ??
+                                User(
+                                    id: '',
+                                    name: '',
+                                    email: '',
+                                    phone: '',
+                                    nit: '');
+                            invoiceProvider.setCurrentUser(
+                                currentUser.copyWith(nit: value));
                           },
                           decoration: InputDecoration(
                             labelText: 'NIT',
@@ -124,12 +162,49 @@ class _ProductListState extends State<ProductList> {
                         ),
                       ),
                     ),
-
+                    Expanded(
+                      flex: 1,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                        child: TextField(
+                          onChanged: (value) {
+                            final invoiceProvider =
+                                Provider.of<InvoiceProvider>(context,
+                                    listen: false);
+                            final currentUser = invoiceProvider.currentUser ??
+                                User(
+                                    id: '',
+                                    name: '',
+                                    email: '',
+                                    phone: '',
+                                    nit: '');
+                            invoiceProvider.setCurrentUser(
+                                currentUser.copyWith(phone: value));
+                          },
+                          decoration: InputDecoration(
+                            labelText: 'Telefono',
+                            prefixIcon: const Icon(Icons.document_scanner,
+                                color: Colors.green),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                              borderSide: const BorderSide(
+                                  color: Colors.green, width: 2),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12.0),
+                              borderSide: const BorderSide(
+                                  color: Colors.grey, width: 1),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                     // Barra de búsqueda (más ancha)
                     SizedBox(
                       width:
                           300, // Aumenté el ancho para que la lista tenga más espacio
                       child: TextField(
+                        focusNode: _searchFocusNode,
                         decoration: InputDecoration(
                           hintText: 'Buscar Producto',
                           prefixIcon:
@@ -152,8 +227,8 @@ class _ProductListState extends State<ProductList> {
                           });
                         },
                         onChanged: (value) {
-                          productProvider
-                              .filterProducts(value); // Filtra productos
+                          Provider.of<ProductProvider>(context, listen: false)
+                              .filterProducts(value);
                         },
                       ),
                     ),
@@ -185,22 +260,12 @@ class _ProductListState extends State<ProductList> {
                                     productProvider.selectedProducts.length &&
                                 productProvider.cart.isNotEmpty,
                             onChanged: (value) {
-                              final invoiceProvider =
-                                  Provider.of<InvoiceProvider>(context,
-                                      listen: false);
-
                               if (value == true) {
                                 // Selecciona todos los productos
                                 productProvider.selectAllProducts();
-                                for (var product in productProvider.cart) {
-                                  invoiceProvider.addProduct(
-                                      product); // Añade a InvoiceProvider
-                                }
                               } else {
                                 // Deselecciona todos los productos
                                 productProvider.deselectAllProducts();
-                                invoiceProvider
-                                    .clearProducts(); // Limpia los productos seleccionados en InvoiceProvider
                               }
                             },
                             shape: const CircleBorder(),
@@ -240,119 +305,163 @@ class _ProductListState extends State<ProductList> {
 
               // Lista de productos en la cesta
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(1.0),
-                  itemCount: productProvider.cart.length,
-                  itemBuilder: (context, index) {
-                    final product = productProvider.cart[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4.0),
-                      child: ListTile(
-                        leading: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Checkbox para marcar o desmarcar el producto
-                            Transform.scale(
-                              scale: 1.5,
-                              child: Checkbox(
-                                value: productProvider.selectedProducts
-                                    .contains(product),
-                                onChanged: (value) {
-                                  final invoiceProvider =
-                                      Provider.of<InvoiceProvider>(
-                                    context,
-                                    listen: false,
-                                  );
-                                  if (value == true) {
-                                    productProvider.selectProduct(
-                                        product); // Marcar como seleccionado
-                                    invoiceProvider.addProduct(product);
-                                  } else {
-                                    productProvider.deselectProduct(
-                                        product); // Desmarcar como seleccionado
-                                    invoiceProvider.removeProduct(product);
-                                  }
-                                },
-                                shape: const CircleBorder(),
-                              ),
-                            ),
-                            const SizedBox(
-                                width:
-                                    8), // Espaciado entre el checkbox y la imagen
-
-                            // Imagen del producto
-                            product.imageUrl.isNotEmpty
-                                ? Image.network(
-                                    product.imageUrl,
-                                    fit: BoxFit.cover,
-                                    width: 50,
-                                    height: 50,
-                                  )
-                                : const Icon(Icons.image, size: 50),
-                          ],
+                child: productProvider.cart.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'La cesta está vacía',
+                          style: TextStyle(fontSize: 16, color: Colors.grey),
                         ),
-                        title: Text(product.name),
-                        subtitle: Text(
-                            'COP ${formatCurrency(product.price.toInt())}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Botones de cantidad
-
-                            InputQty.int(
-                              maxVal: product.stock,
-                              initVal: productProvider.quantities[product] ?? 1,
-                              minVal: 1,
-                              steps: 1,
-                              decoration: const QtyDecorationProps(
-                                qtyStyle: QtyStyle
-                                    .classic, // Adjust based on available styles
-                                orientation: ButtonOrientation.horizontal,
-                                isBordered: true,
-                                borderShape: BorderShapeBtn
-                                    .square, // Use valid border shapes
-                              ),
-                              qtyFormProps: const QtyFormProps(
-                                cursorColor:
-                                    Colors.blue, // Styling for the input field
-                              ),
-                              onQtyChanged: (value) {
-                                if (value <= product.stock) {
-                                  // Actualiza solo si la cantidad es menor o igual al stock
-                                  productProvider.updateQuantity(
-                                      product, value);
-                                } else {
-                                  // Lógica opcional para notificar que se alcanzó el límite
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'No puedes seleccionar más de ${product.stock} unidades.',
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      duration: const Duration(seconds: 2),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(1.0),
+                        itemCount: productProvider.cart.length,
+                        itemBuilder: (context, index) {
+                          final product = productProvider.cart[index];
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4.0),
+                            child: ListTile(
+                              leading: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Checkbox para marcar o desmarcar el producto
+                                  Transform.scale(
+                                    scale: 1.5,
+                                    child: Checkbox(
+                                      value: productProvider.selectedProducts
+                                          .contains(product),
+                                      onChanged: (value) {
+                                        if (value == true) {
+                                          productProvider
+                                              .selectProduct(product);
+                                        } else {
+                                          productProvider
+                                              .deselectProduct(product);
+                                        }
+                                      },
+                                      shape: const CircleBorder(),
                                     ),
-                                  );
-                                }
-                              },
-                            ),
+                                  ),
+                                  const SizedBox(
+                                      width:
+                                          8), // Espaciado entre el checkbox y la imagen
 
-                            const SizedBox(
-                                width:
-                                    8), // Espaciado entre botones y el icono delete
+                                  // Imagen del producto
+                                  product.imageUrl.isNotEmpty
+                                      ? Image.network(
+                                          product.imageUrl,
+                                          fit: BoxFit.cover,
+                                          width: 50,
+                                          height: 50,
+                                        )
+                                      : const Icon(Icons.image, size: 50),
+                                ],
+                              ),
+                              title: Text(product.name),
+                              subtitle: Row(
+                                children: [
+                                  const Text('COP ',
+                                      style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold)),
+                                  SizedBox(
+                                    width: 50, // Ancho del campo editable
+                                    child: TextFormField(
+                                      controller: productProvider
+                                          .getPriceController(product),
+                                      keyboardType: TextInputType.number,
+                                      textAlign: TextAlign.right,
+                                      style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold),
+                                      decoration: const InputDecoration(
+                                        border: InputBorder
+                                            .none, // **Quita los bordes**
+                                        contentPadding: EdgeInsets.symmetric(
+                                            vertical: 2), // **Reduce altura**
+                                        isDense: true, // **Compacta el campo**
+                                      ),
+                                      onChanged: (value) {
+                                        double? newPrice = double.tryParse(
+                                            value.replaceAll('.', ''));
+                                        if (newPrice != null && newPrice > 0) {
+                                          productProvider.updatePrice(
+                                              product, newPrice);
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Botones de cantidad
 
-                            // Botón de eliminar
-                            IconButton(
-                              icon: const Icon(Icons.delete, color: Colors.red),
-                              onPressed: () {
-                                productProvider.removeFromCart(product);
-                              },
+                                  InputQty.int(
+                                    maxVal: product.stock,
+                                    initVal:
+                                        productProvider.quantities[product] ??
+                                            1,
+                                    minVal: 1,
+                                    steps: 1,
+                                    decoration: const QtyDecorationProps(
+                                      qtyStyle: QtyStyle
+                                          .classic, // Adjust based on available styles
+                                      orientation: ButtonOrientation.horizontal,
+                                      isBordered: true,
+                                      borderShape: BorderShapeBtn
+                                          .square, // Use valid border shapes
+                                    ),
+                                    qtyFormProps: const QtyFormProps(
+                                      cursorColor: Colors
+                                          .blue, // Styling for the input field
+                                    ),
+                                    onQtyChanged: (value) {
+                                      if (value <= product.stock) {
+                                        // Actualiza solo si la cantidad es menor o igual al stock
+                                        final invoiceProvider =
+                                            Provider.of<InvoiceProvider>(
+                                                context,
+                                                listen: false);
+                                        productProvider.updateQuantity(
+                                            product, value, invoiceProvider);
+                                        // Actualiza el subtotal en el InvoiceProvider
+                                      } else {
+                                        // Lógica opcional para notificar que se alcanzó el límite
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              'No puedes seleccionar más de ${product.stock} unidades.',
+                                              style:
+                                                  const TextStyle(fontSize: 14),
+                                            ),
+                                            duration:
+                                                const Duration(seconds: 2),
+                                          ),
+                                        );
+                                      }
+                                    },
+                                  ),
+
+                                  const SizedBox(
+                                      width:
+                                          8), // Espaciado entre botones y el icono delete
+
+                                  // Botón de eliminar
+                                  IconButton(
+                                    icon: const Icon(Icons.delete,
+                                        color: Colors.red),
+                                    onPressed: () {
+                                      productProvider.removeFromCart(product);
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
-                          ],
-                        ),
+                          );
+                        },
                       ),
-                    );
-                  },
-                ),
               ),
             ],
           ),

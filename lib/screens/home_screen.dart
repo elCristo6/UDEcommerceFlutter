@@ -73,6 +73,7 @@ import '../widgets/product_card.dart';
 import '../widgets/search_bar.dart' as custom;
 
 class HomeScreen extends StatelessWidget {
+  // ignore: use_super_parameters
   const HomeScreen({Key? key}) : super(key: key);
 
   @override

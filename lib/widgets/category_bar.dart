@@ -68,7 +68,7 @@ class _CategoryBarState extends State<CategoryBar> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Divider(),
+                  const Divider(),
                   _buildMenuItem(Icons.adb, 'Robotica'),
                   _buildMenuItem(Icons.face, 'Impresion 3D'),
                   _buildMenuItem(Icons.accessibility, 'Kits educativos'),
@@ -174,7 +174,9 @@ class _CategoryBarState extends State<CategoryBar> {
                   ),
                   style: ElevatedButton.styleFrom(
                     foregroundColor: Colors.white,
+                    // ignore: deprecated_member_use
                     disabledForegroundColor: Colors.white.withOpacity(0.38),
+                    // ignore: deprecated_member_use
                     disabledBackgroundColor: Colors.white.withOpacity(0.12),
                     shadowColor: Colors.transparent,
                     elevation: 0,
