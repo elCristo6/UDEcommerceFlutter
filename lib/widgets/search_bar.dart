@@ -128,16 +128,28 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                           ),
                           const SizedBox(width: 10),
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                height: 45,
-                                width: 45,
-                                decoration: const BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
+                              GestureDetector(
+                                onTap: () {
+                                  // Al presionar el icono de la cesta, navega a la página de la cesta
+                                  Navigator.pushNamed(context, '/sales');
+                                },
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      height: 45,
+                                      width: 45,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.blue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.person,
+                                          color: Colors.white, size: 30),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.person,
-                                    color: Colors.white, size: 30),
                               ),
                               const SizedBox(width: 5),
                               const Column(

@@ -92,9 +92,9 @@ class PDFService {
 
       // Información del cliente
       final clientInfo = '''
-Cliente: ${invoice.user?.name ?? "Cliente"}
-NIT/CC: ${invoice.user?.nit ?? "No proporcionado"}
-Teléfono: ${invoice.user?.phone ?? "No proporcionado"}
+Cliente: ${invoice.user?.name ?? "Cliente Mostrador"}
+NIT/CC: ${invoice.user?.nit ?? ""}
+Teléfono: ${invoice.user?.phone ?? ""}
 Medio de pago: ${invoice.medioPago}
       ''';
       graphics.drawString(
