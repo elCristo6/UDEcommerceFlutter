@@ -16,8 +16,31 @@ class Product {
     required this.imageUrl,
     required this.stock,
     required this.category,
-    required this.quantity,
+    this.quantity = 1,
   });
+
+  // Método copyWith para crear una copia modificada del producto
+  Product copyWith({
+    String? id,
+    String? name,
+    double? price,
+    String? description,
+    String? imageUrl,
+    int? stock,
+    String? category,
+    int? quantity,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      price: price ?? this.price,
+      description: description ?? this.description,
+      imageUrl: imageUrl ?? this.imageUrl,
+      stock: stock ?? this.stock,
+      category: category ?? this.category,
+      quantity: quantity ?? this.quantity,
+    );
+  }
 
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(

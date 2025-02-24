@@ -11,6 +11,7 @@ class Invoice {
   final String medioPago;
   final double pagaCon;
   final double cambio;
+  final int? consecutivo;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -23,9 +24,11 @@ class Invoice {
     required this.medioPago,
     required this.pagaCon,
     required this.cambio,
+    this.consecutivo,
     required this.createdAt,
     required this.updatedAt,
   });
+
   factory Invoice.fromJson(Map<String, dynamic> json) {
     return Invoice(
       id: json['_id'] ?? '',
@@ -39,11 +42,41 @@ class Invoice {
       pagaCon: (json['pagaCon'] as num?)?.toDouble() ?? 0.0,
       cambio: (json['cambio'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0.0,
-      products: (json['products'] as List<dynamic>?)
-              ?.map((product) =>
-                  Product.fromJson(product as Map<String, dynamic>))
-              .toList() ??
+      consecutivo: json['consecutivo'] as int?,
+      products: (json['products'] as List<dynamic>?)?.map((item) {
+            final productValue = item['product'];
+            final int quantity = item['quantity'] as int? ?? 1;
+
+            if (productValue is Map<String, dynamic>) {
+              return Product.fromJson(productValue)
+                  .copyWith(quantity: quantity);
+            } else if (productValue is String) {
+              return Product(
+                id: productValue,
+                name: 'Producto sin detalles',
+                price: 0.0,
+                description: '',
+                imageUrl: '',
+                stock: 0,
+                category: '',
+                quantity: quantity,
+              );
+            } else {
+              // Manejar otros casos si es necesario
+              return Product(
+                id: 'Desconocido',
+                name: 'Desconocido',
+                price: 0.0,
+                description: '',
+                imageUrl: '',
+                stock: 0,
+                category: '',
+                quantity: quantity,
+              );
+            }
+          }).toList() ??
           [],
+
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt']) ?? DateTime.now()
           : DateTime.now(),
@@ -62,6 +95,7 @@ class Invoice {
       'medioPago': medioPago,
       'pagaCon': pagaCon,
       'cambio': cambio,
+      'consecutivo': consecutivo,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
     };

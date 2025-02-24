@@ -15,6 +15,7 @@ class _CartSummaryState extends State<CartSummary> {
   // Por defecto se selecciona "Factura de venta"
   bool _isFacturaSelected = true;
   bool _isCotizacionSelected = false;
+  final TextEditingController _pagaConController = TextEditingController();
 
   String formatCurrency(int value) {
     return value.toString().replaceAllMapped(
@@ -80,6 +81,7 @@ class _CartSummaryState extends State<CartSummary> {
                 SizedBox(
                   width: 100,
                   child: TextField(
+                    controller: _pagaConController,
                     textAlign: TextAlign.right,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(fontSize: 14),
@@ -218,6 +220,15 @@ class _CartSummaryState extends State<CartSummary> {
                     await invoiceProvider.generatePdfLocal(context,
                         docType: 'COTIZACIÓN');
                   }
+                  // Si todo sale bien, limpiamos los datos:
+                  invoiceProvider.clearAllData();
+                  productProvider.clearCart();
+                  setState(() {
+                    // Restablece el estado predeterminado
+                    _isFacturaSelected = true;
+                    _isCotizacionSelected = false;
+                    _pagaConController.clear();
+                  });
                 } catch (error) {
                   // ignore: use_build_context_synchronously
                   ScaffoldMessenger.of(context).showSnackBar(

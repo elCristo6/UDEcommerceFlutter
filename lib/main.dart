@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
-import 'screens/UnderConstructionScreen.dart';
 import 'screens/cesta_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/sales_screen.dart';
@@ -38,8 +37,8 @@ class MyApp extends StatelessWidget {
           ),
         ),
 
-        home: const UnderConstructionScreen(),
-        //initialRoute: '/home', // Ruta inicial
+        //home: const UnderConstructionScreen(),
+        initialRoute: '/home', // Ruta inicial
         routes: {
           '/home': (context) => const HomeScreen(), // Pantalla principal
           '/cesta': (context) => const CestaScreen(), // Pantalla de la cesta

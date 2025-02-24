@@ -195,7 +195,7 @@ Medio de pago: ${invoice.medioPago}
       html.window.open(url, '_blank');
 
       // Limpia la URL del blob después de un tiempo
-      Future.delayed(const Duration(seconds: 3), () {
+      Future.delayed(const Duration(seconds: 30), () {
         html.Url.revokeObjectUrl(url);
       });
     } catch (e) {

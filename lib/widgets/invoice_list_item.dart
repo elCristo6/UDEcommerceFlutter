@@ -1,49 +1,76 @@
 import 'package:flutter/material.dart';
 
+import '../models/invoice_model.dart';
+import '../services/pdfService.dart';
+
 class InvoiceListItem extends StatelessWidget {
-  const InvoiceListItem({Key? key}) : super(key: key);
+  final Invoice invoice;
+
+  const InvoiceListItem({
+    Key? key,
+    required this.invoice,
+  }) : super(key: key);
+
+  // Función para formatear cantidades (ej. 50000 => "50.000")
+  String _formatCurrency(num value) {
+    final strVal = value.toStringAsFixed(0);
+    return strVal.replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (Match match) => '${match[1]}.',
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
+    // Extraer datos del invoice
+    final String consecutivoText = invoice.consecutivo != null
+        ? "Factura #${invoice.consecutivo}"
+        : "Factura";
+    final String cliente =
+        invoice.user?.name != null ? invoice.user!.name : "Cliente";
+    final String totalText = "\$${_formatCurrency(invoice.totalAmount)}";
+    final String pagaConText = "\$${_formatCurrency(invoice.pagaCon)}";
+    final String cambioText = "\$${_formatCurrency(invoice.cambio)}";
+    final String medioPagoText = invoice.medioPago;
+
+    // Lista de productos (los nombres, con un guión al inicio de cada uno)
+    final String productosText =
+        invoice.products.map((p) => "- ${p.name} x${p.quantity}").join("\n");
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 8.0),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
-          // "crossAxisAlignment: CrossAxisAlignment.start"
-          // si quieres alinear todo arriba
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ================== COLUMNA 1 ==================
             Expanded(
-              flex: 1, // Ajusta según el espacio que desees
+              flex: 1,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Factura (más pequeño)
+                  // Número de factura (consecutivo)
                   Text(
-                    "Factura 2132",
-                    style: TextStyle(
+                    consecutivoText,
+                    style: const TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
-
-                  // Nombre en negrita
-                  const Text(
-                    "Nombre: Ardurobotic",
-                    style: TextStyle(
+                  // Nombre del cliente en negrita
+                  Text(
+                    "Nombre: $cliente",
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
                   const SizedBox(height: 4),
-
-                  // TOTAL en negrita
-                  const Text(
-                    "TOTAL: \$50.000",
-                    style: TextStyle(
+                  // Total en negrita
+                  Text(
+                    "TOTAL: $totalText",
+                    style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
                     ),
@@ -54,14 +81,10 @@ class InvoiceListItem extends StatelessWidget {
 
             // ================== COLUMNA 2 ==================
             Expanded(
-              flex: 3, // Más ancho para que quepan varios productos
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text("- Motor N20"),
-                  Text("- Elevador xl4015 ..."),
-                  // Agrega más líneas si lo deseas
-                ],
+              flex: 3,
+              child: Text(
+                productosText,
+                style: const TextStyle(fontSize: 14),
               ),
             ),
 
@@ -70,9 +93,15 @@ class InvoiceListItem extends StatelessWidget {
               flex: 1,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text("Paga con: 100.000"),
-                  Text("Cambio: 50.000"),
+                children: [
+                  Text(
+                    "Paga con: $pagaConText",
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  Text(
+                    "Cambio: $cambioText",
+                    style: const TextStyle(fontSize: 14),
+                  ),
                 ],
               ),
             ),
@@ -86,8 +115,9 @@ class InvoiceListItem extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.print),
                     iconSize: 30.0,
-                    onPressed: () {
-                      // Lógica para imprimir
+                    onPressed: () async {
+                      await PDFService().printInvoiceStyled(invoice,
+                          docType: 'FACTURA DE VENTA');
                     },
                   ),
                   IconButton(
@@ -113,7 +143,7 @@ class InvoiceListItem extends StatelessWidget {
               flex: 1,
               child: Center(
                 child: Text(
-                  "Nequi", // O "Efectivo", "Daviplata", etc.
+                  medioPagoText,
                   style: const TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,

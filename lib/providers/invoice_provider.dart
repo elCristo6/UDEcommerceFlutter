@@ -21,6 +21,7 @@ class InvoiceProvider with ChangeNotifier {
 
   // Lista para almacenar facturas creadas (opcional)
   final List<Invoice> _invoices = [];
+  List<Invoice> _todaysSales = [];
 
   // ================== GETTERS ==================
   User? get currentUser => _currentUser;
@@ -28,6 +29,7 @@ class InvoiceProvider with ChangeNotifier {
   double get pagaCon => _pagaCon;
   double get cambio => _cambio;
   List<Invoice> get invoices => _invoices;
+  List<Invoice> get todaysSales => _todaysSales;
 
   // ================== SETTERS ==================
   void setCurrentUser(User user) {
@@ -98,6 +100,35 @@ class InvoiceProvider with ChangeNotifier {
     );
   }
 
+  /// Método para obtener las ventas de hoy.
+  /// Se asume que el endpoint devuelve un JSON con:
+  /// { "success": true, "data": [ { ... factura1 ... }, { ... factura2 ... }, ... ] }
+  Future<void> fetchTodaysSales() async {
+    try {
+      final response = await http.get(Uri.parse(_baseUrl));
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        // Se asume que el array de facturas viene en "data"
+        final List<dynamic> data = jsonResponse['data'];
+        // Puedes aplicar un filtro por fecha si el servidor retorna todas las ventas
+        // y necesitas solo las de hoy. Por ejemplo:
+        final today = DateTime.now();
+        _todaysSales =
+            data.map((json) => Invoice.fromJson(json)).where((invoice) {
+          // Aquí suponemos que invoice.createdAt es DateTime y filtramos por día
+          return invoice.createdAt.year == today.year &&
+              invoice.createdAt.month == today.month &&
+              invoice.createdAt.day == today.day;
+        }).toList();
+        notifyListeners();
+      } else {
+        throw Exception("Error al obtener ventas: ${response.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("Error en fetchTodaysSales: $e");
+    }
+  }
+
   /// Genera el PDF usando la factura local (sin hacer petición al servidor).
   /// Ideal para COTIZACIONES o pruebas offline.
   Future<void> generatePdfLocal(BuildContext context,
@@ -145,17 +176,6 @@ class InvoiceProvider with ChangeNotifier {
       );
       return;
     }
-/*
-    // Verifica datos básicos de usuario
-    if (_currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Por favor, completa los datos del usuario."),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }*/
 
     // Construye la lista de productos a enviar al servidor
     final List<Map<String, dynamic>> productList =

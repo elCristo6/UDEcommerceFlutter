@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
+import '../models/invoice_model.dart';
+import '../providers/invoice_provider.dart';
 import '../widgets/invoice_list_item.dart';
 import '../widgets/sales_footer.dart';
 import '../widgets/sales_tabbar.dart';
-// Asumiendo que tu SearchBar está en ../widgets/search_bar.dart
 import '../widgets/search_bar.dart' as custom;
 
 class SalesScreen extends StatefulWidget {
@@ -22,6 +24,9 @@ class _SalesScreenState extends State<SalesScreen>
     super.initState();
     // Tenemos 3 pestañas: HOY, Mensuales, Anuales
     _tabController = TabController(length: 3, vsync: this);
+    Future.microtask(() {
+      Provider.of<InvoiceProvider>(context, listen: false).fetchTodaysSales();
+    });
   }
 
   @override
@@ -64,9 +69,9 @@ class _SalesScreenState extends State<SalesScreen>
         // Le das un margen para que no quede pegado
         margin: const EdgeInsets.all(8.0),
         // Bordes redondeados arriba, fondo azul (lo maneja SalesFooter)
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           color: Colors.blue, // Por si SalesFooter no aplica su color
-          borderRadius: const BorderRadius.only(
+          borderRadius: BorderRadius.only(
             topLeft: Radius.circular(10),
             topRight: Radius.circular(10),
           ),
@@ -81,17 +86,22 @@ class _SalesScreenState extends State<SalesScreen>
   // Pestaña: Ventas de HOY
   // =====================================
   Widget _buildVentasHoy() {
-    // Hacemos un contenedor blanco para cada tab
-    return Container(
-      color: Colors.white,
-      child: ListView(
-        padding: const EdgeInsets.all(8.0),
-        children: const [
-          InvoiceListItem(),
-          InvoiceListItem(),
-          InvoiceListItem(),
-        ],
-      ),
+    return Consumer<InvoiceProvider>(
+      builder: (context, invoiceProvider, child) {
+        // Si aún no se han cargado las ventas de hoy, muestra un indicador
+        if (invoiceProvider.todaysSales.isEmpty) {
+          return const Center(child: Text("No hay ventas para hoy."));
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(8.0),
+          itemCount: invoiceProvider.todaysSales.length,
+          itemBuilder: (context, index) {
+            final Invoice invoice = invoiceProvider.todaysSales[index];
+            return InvoiceListItem(invoice: invoice);
+          },
+        );
+      },
     );
   }
 
@@ -104,8 +114,8 @@ class _SalesScreenState extends State<SalesScreen>
       child: ListView(
         padding: const EdgeInsets.all(8.0),
         children: const [
-          InvoiceListItem(),
-          InvoiceListItem(),
+          //InvoiceListItem(),
+          //InvoiceListItem(),
         ],
       ),
     );
@@ -120,7 +130,7 @@ class _SalesScreenState extends State<SalesScreen>
       child: ListView(
         padding: const EdgeInsets.all(8.0),
         children: const [
-          InvoiceListItem(),
+          //InvoiceListItem(),
         ],
       ),
     );
