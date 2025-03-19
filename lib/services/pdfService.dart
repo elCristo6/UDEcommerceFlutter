@@ -23,7 +23,7 @@ class PDFService {
   }) async {
     try {
       // Carga la imagen del logo
-      ByteData logoData = await rootBundle.load('assets/UDLogo.png');
+      ByteData logoData = await rootBundle.load('assets/UDSinfondo.png');
       final Uint8List logoBytes = logoData.buffer.asUint8List();
       final PdfBitmap logoBitmap = PdfBitmap(logoBytes);
 
@@ -53,17 +53,17 @@ class PDFService {
       double top = 20;
 
       // Dibuja el logo
-      graphics.drawImage(logoBitmap, Rect.fromLTWH(20, top, 70, 70));
+      graphics.drawImage(logoBitmap, Rect.fromLTWH(20, top, 120, 70));
 
       // Información de la empresa
       graphics.drawString(
         '''
-  UD ELECTRONICS
-  Desarrollo de software, electrónica, robótica, programación e impresión 3D
-  NIT: 1022972666-6 REGIMEN SIMPLIFICADO
-  KR 9 # 19  30 Local 202
-  3208576038 * 3213213756 * 6012105424
-  udelectronics.net@gmail.com
+                    UD ELECTRONICS
+                    Desarrollo de software, electrónica, robótica, programación e impresión 3D
+                    NIT: 1022972666-6 REGIMEN SIMPLIFICADO
+                    KR 9 # 19  30 Local 202
+                    3208576038 * 3213213756 * 6012105424
+                    udelectronics.net@gmail.com
         ''',
         contentFont,
         bounds: Rect.fromLTWH(90, top, pageSize.width - 100, 80),

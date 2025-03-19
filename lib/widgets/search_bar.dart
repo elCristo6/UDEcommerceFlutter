@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
 class SearchBar extends StatelessWidget implements PreferredSizeWidget {
-  const SearchBar({super.key});
+  final String hintText;
+  final ValueChanged<String>? onChanged;
+
+  const SearchBar({
+    Key? key,
+    this.hintText = 'Buscar...',
+    this.onChanged,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -17,17 +24,17 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
             },
             child: Container(
               width: MediaQuery.of(context).size.width *
-                  0.1, // 10% del ancho total
-              height: 110, // Altura fija ajustada
+                  0.09, // 10% del ancho total
+              height: 200, // Altura fija ajustada
               decoration: const BoxDecoration(
                 border: Border(
                   // Borde blanco
-                  right: BorderSide(color: Colors.white, width: 0.1),
+                  right: BorderSide(color: Colors.white, width: 0.2),
                 ),
               ),
               alignment: Alignment.center,
               child: Image.asset(
-                'assets/Logo2025-1.png', // Asegúrate de que la ruta es correcta
+                'assets/UDlogo copy.jpeg', // Asegúrate de que la ruta es correcta
                 fit: BoxFit.contain,
               ),
             ),
@@ -73,9 +80,11 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                           ),
                           child: Row(
                             children: [
-                              const Expanded(
+                              Expanded(
                                 child: TextField(
-                                  decoration: InputDecoration(
+                                  onChanged: onChanged,
+                                  onSubmitted: onChanged,
+                                  decoration: const InputDecoration(
                                     hintText: 'Buscar...',
                                     hintStyle: TextStyle(color: Colors.black54),
                                     border: InputBorder.none,
@@ -104,25 +113,42 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                       Row(
                         children: [
                           Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Container(
-                                height: 45,
-                                width: 45,
-                                decoration: const BoxDecoration(
-                                  color: Colors.blue,
-                                  shape: BoxShape.circle,
+                              GestureDetector(
+                                onTap: () {
+                                  // Al presionar el icono de la cesta, navega a la página de la cesta
+                                  Navigator.pushNamed(context, '/infoProducts');
+                                },
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Container(
+                                      height: 45,
+                                      width: 45,
+                                      decoration: const BoxDecoration(
+                                        color: Colors.blue,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.person,
+                                          color: Colors.white, size: 30),
+                                    ),
+                                  ],
                                 ),
-                                child: const Icon(Icons.qr_code,
-                                    color: Colors.white, size: 30),
                               ),
                               const SizedBox(width: 5),
-                              const Text(
-                                'App',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 22.5,
-                                  fontWeight: FontWeight.w500,
-                                ),
+                              const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Productos',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ],
                           ),
@@ -156,10 +182,10 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'ADMINISTRADOR',
+                                    'Ventas',
                                     style: TextStyle(
                                       color: Colors.white,
-                                      fontSize: 16,
+                                      fontSize: 20,
                                       fontWeight: FontWeight.w500,
                                     ),
                                   ),
@@ -221,7 +247,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
                                 'Cesta',
                                 style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 22.5,
+                                    fontSize: 20,
                                     fontFamily: 'Roboto',
                                     fontWeight: FontWeight.w500),
                               ),
