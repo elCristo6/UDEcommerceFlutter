@@ -4,14 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../config/api_config.dart';
 import '../models/invoice_model.dart'; // Modelo de factura
 import '../models/product_model.dart';
 import '../models/user_model.dart'; // Modelo de usuario
 import '../providers/product_provider.dart'; // Proveedor de productos
+import '../services/invoice_service.dart';
 import '../services/pdfService.dart';
 
 class InvoiceProvider with ChangeNotifier {
-  final String _baseUrl = "http://34.226.208.66:3001/api/newBill";
+  final String _baseUrl = "${ApiConfig.baseUrl}/newBill";
+  final InvoiceService _invoiceService = InvoiceService();
 
   // ================== CAMPOS ==================
   User? _currentUser;
@@ -78,9 +81,10 @@ class InvoiceProvider with ChangeNotifier {
         name: product.name,
         price: price,
         description: product.description,
-        imageUrl: product.imageUrl,
         stock: product.stock,
         category: product.category,
+        images: List<String>.from(product.images),
+        cachedImageBytes: product.cachedImageBytes,
         quantity: quantity,
       );
     }).toList();
@@ -100,30 +104,121 @@ class InvoiceProvider with ChangeNotifier {
     );
   }
 
-  /// Método para obtener las ventas de hoy.
-  /// Se asume que el endpoint devuelve un JSON con:
-  /// { "success": true, "data": [ { ... factura1 ... }, { ... factura2 ... }, ... ] }
+// En invoice_provider.dart
+  Future<User?> fetchUserByPhone(String phone) async {
+    try {
+      final sanitized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      final url = Uri.parse("${ApiConfig.baseUrl}/users/phone/$sanitized");
+      final resp = await http.get(url);
+
+      if (resp.statusCode == 200) {
+        final raw = jsonDecode(resp.body);
+
+        // Tu API puede responder como { ...usuario } o { "data": { ...usuario } }
+        final Map<String, dynamic>? map =
+            (raw is Map<String, dynamic> && raw['data'] is Map<String, dynamic>)
+                ? (raw['data'] as Map<String, dynamic>)
+                : (raw is Map<String, dynamic> ? raw : null);
+
+        if (map == null) return null;
+
+        // Mapea campos al modelo User (observa que tu User.fromJson espera phoneNumber/cc también)
+        final user = User.fromJson(map);
+        // Sincroniza nombres de clave si tu backend usa 'cc' en lugar de 'nit' (ya lo manejas en User.fromJson)
+        setCurrentUser(user);
+        return user;
+      }
+
+      debugPrint("fetchUserByPhone ${resp.statusCode}: ${resp.body}");
+      return null;
+    } catch (e) {
+      debugPrint("Error fetchUserByPhone: $e");
+      return null;
+    }
+  }
+
+  Future<User?> fetchUserById(String userId) async {
+    final response =
+        await http.get(Uri.parse("${ApiConfig.baseUrl}/users/id/$userId"));
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return User.fromJson(data);
+    } else {
+      debugPrint("Error fetching user: ${response.statusCode}");
+      return null;
+    }
+  }
+
+  User? _parseUserFromBody(String body) {
+    final decoded = jsonDecode(body);
+
+    if (decoded is Map<String, dynamic>) {
+      // Si viene envuelto en 'data', úsalo; si no, usa el propio mapa
+      final Map<String, dynamic>? raw =
+          decoded['data'] is Map<String, dynamic> ? decoded['data'] : decoded;
+      if (raw != null) {
+        return User.fromJson(raw);
+      }
+    }
+    return null;
+  }
+
   Future<void> fetchTodaysSales() async {
     try {
       final response = await http.get(Uri.parse(_baseUrl));
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        // Se asume que el array de facturas viene en "data"
-        final List<dynamic> data = jsonResponse['data'];
-        // Puedes aplicar un filtro por fecha si el servidor retorna todas las ventas
-        // y necesitas solo las de hoy. Por ejemplo:
-        final today = DateTime.now();
-        _todaysSales =
-            data.map((json) => Invoice.fromJson(json)).where((invoice) {
-          // Aquí suponemos que invoice.createdAt es DateTime y filtramos por día
-          return invoice.createdAt.year == today.year &&
-              invoice.createdAt.month == today.month &&
-              invoice.createdAt.day == today.day;
-        }).toList();
-        notifyListeners();
-      } else {
+      if (response.statusCode != 200) {
         throw Exception("Error al obtener ventas: ${response.statusCode}");
       }
+
+      final jsonResponse = jsonDecode(response.body);
+      final List<dynamic> data = jsonResponse['data'];
+      final today = DateTime.now();
+
+      final List<Invoice> loadedSales = [];
+
+      for (final facturaJson in data) {
+        final invoice = Invoice.fromJson(facturaJson);
+
+        final isToday = invoice.createdAt.year == today.year &&
+            invoice.createdAt.month == today.month &&
+            invoice.createdAt.day == today.day;
+
+        if (!isToday) continue;
+
+        // Si ya viene con user completo:
+        if (invoice.user != null) {
+          loadedSales.add(invoice);
+          continue;
+        }
+
+        // Si viene con userId, intentamos enriquecerlo
+        if (invoice.userId != null && invoice.userId!.isNotEmpty) {
+          try {
+            final userResp = await http.get(
+              Uri.parse("${ApiConfig.baseUrl}/users/id/${invoice.userId}"),
+            );
+
+            if (userResp.statusCode == 200) {
+              final user = _parseUserFromBody(userResp.body);
+              if (user != null) {
+                loadedSales.add(invoice.copyWith(user: user));
+              } else {
+                // No hay 'data' pero tampoco objeto válido => agregamos como llegó
+                loadedSales.add(invoice);
+              }
+            } else {
+              loadedSales.add(invoice);
+            }
+          } catch (_) {
+            loadedSales.add(invoice);
+          }
+        } else {
+          loadedSales.add(invoice);
+        }
+      }
+
+      _todaysSales = loadedSales;
+      notifyListeners();
     } catch (e) {
       throw Exception("Error en fetchTodaysSales: $e");
     }
@@ -131,6 +226,7 @@ class InvoiceProvider with ChangeNotifier {
 
   /// Genera el PDF usando la factura local (sin hacer petición al servidor).
   /// Ideal para COTIZACIONES o pruebas offline.
+
   Future<void> generatePdfLocal(BuildContext context,
       {String docType = 'COTIZACIÓN'}) async {
     final productProvider =
@@ -158,15 +254,11 @@ class InvoiceProvider with ChangeNotifier {
     // productProvider.removeSelectedProducts();
   }
 
-  // ================== FACTURA CON ENVÍO AL SERVIDOR ==================
-  /// Envía la factura al servidor y luego imprime el PDF usando los datos LOCALES
-  /// (para asegurarnos de que no falte nada).
   Future<void> createInvoice(BuildContext context,
-      {String docType = 'FACTURA DE VENTA'}) async {
+      {String docType = 'FACTURA DE COMPRA'}) async {
     final productProvider =
         Provider.of<ProductProvider>(context, listen: false);
 
-    // Verifica que haya productos seleccionados
     if (productProvider.selectedProducts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -177,36 +269,46 @@ class InvoiceProvider with ChangeNotifier {
       return;
     }
 
-    // Construye la lista de productos a enviar al servidor
-    final List<Map<String, dynamic>> productList =
-        productProvider.selectedProducts.map((product) {
-      final quantity = productProvider.quantities[product] ?? 1;
-      final price = productProvider.modifiedPrices[product] ?? product.price;
-      return {
-        "productId": product.id,
-        "name": product.name,
-        "quantity": quantity,
-        "price": price,
-      };
-    }).toList();
+    // 1) Construimos el invoice local con todos los datos
+    Invoice localInvoice = buildLocalInvoice(productProvider);
 
-    // Datos a enviar en la petición
+    // 2) Obtenemos el consecutivo desde el servidor
+    final int nextConsec = await _invoiceService.fetchNextConsecutive();
+
+    // 3) Creamos un nuevo Invoice basado en el local, pero fijando el consecutivo
+    localInvoice = Invoice(
+      id: localInvoice.id,
+      user: localInvoice.user,
+      userId: localInvoice.userId,
+      products: localInvoice.products,
+      totalAmount: localInvoice.totalAmount,
+      medioPago: localInvoice.medioPago,
+      pagaCon: localInvoice.pagaCon,
+      cambio: localInvoice.cambio,
+      consecutivo: nextConsec,
+      createdAt: localInvoice.createdAt,
+      updatedAt: localInvoice.updatedAt,
+    );
+
+    // 4) Armamos el payload para el servidor (incluyendo el consecutivo)
     final invoiceData = {
-      "name": _currentUser?.name ?? "Cliente",
-      "phone": _currentUser?.phone ?? "No proporcionado",
-      "email": _currentUser?.email ?? "No proporcionado",
-      "cc": _currentUser?.nit ?? "No proporcionado",
+      "name": localInvoice.user?.name ?? "Cliente",
+      "phone": localInvoice.user?.phone ?? "No proporcionado",
+      "email": localInvoice.user?.email ?? "No proporcionado",
+      "cc": localInvoice.user?.nit ?? "No proporcionado",
       "detalles": "Factura generada desde Flutter",
-      "products": productList
+      "products": localInvoice.products
           .map((p) => {
-                "productId": p["productId"],
-                "quantity": p["quantity"],
+                "productId": p.id,
+                "quantity": p.quantity,
+                "appliedPrice": p.price,
               })
           .toList(),
-      "pagaCon": _pagaCon,
-      "medioPago": _medioPago,
-      "cambio": _cambio,
-      "totalAmount": selectedTotal(productProvider),
+      "pagaCon": localInvoice.pagaCon,
+      "medioPago": localInvoice.medioPago,
+      "cambio": localInvoice.cambio,
+      "totalAmount": localInvoice.totalAmount,
+      "consecutivo": localInvoice.consecutivo,
     };
 
     try {
@@ -216,54 +318,43 @@ class InvoiceProvider with ChangeNotifier {
         body: jsonEncode(invoiceData),
       );
 
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        final responseData = jsonDecode(response.body);
-
-        // Opcional: podemos leer lo que devuelva el servidor
-        //           (por si queremos mostrar un ID en consola)
-        final invoiceServer = Invoice.fromJson(responseData['data']);
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final body = jsonDecode(response.body);
+        final invoiceServer = Invoice.fromJson(body['data']);
         _invoices.add(invoiceServer);
 
-        // Notifica éxito en la UI
-        // ignore: use_build_context_synchronously
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text(responseData['message'] ?? "Factura creada exitosamente"),
+            content: Text(
+              body['message'] ??
+                  "Factura #${localInvoice.consecutivo} creada exitosamente",
+            ),
             backgroundColor: Colors.green,
           ),
         );
 
-        print("Factura generada en el servidor:");
-        print(invoiceServer.toJson());
-
-        // Actualiza los productos y su lista filtrada (por si cambió stock)
+        // refrescar stock, etc.
         await productProvider.fetchProducts(forceUpdate: true);
+        // 5) Generar PDF usando nuestro localInvoice (con todos los datos)
+        await PDFService().printInvoiceStyled(
+          localInvoice,
+          docType: docType,
+        );
 
-        // AHORA generamos el PDF usando NUESTROS DATOS LOCALES
-        // para asegurarnos de que no falte nada.
-        final pdfService = PDFService();
-        final localInvoice = buildLocalInvoice(productProvider);
-        await pdfService.printInvoiceStyled(localInvoice, docType: docType);
-
-        // Limpia los productos seleccionados en el carrito
         productProvider.removeSelectedProducts();
       } else {
-        final responseData = jsonDecode(response.body);
-        // ignore: use_build_context_synchronously
+        final err = jsonDecode(response.body);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text("Error al crear la factura: ${responseData['message']}"),
+            content: Text("Error al crear la factura: ${err['message']}"),
             backgroundColor: Colors.red,
           ),
         );
       }
-    } catch (error) {
-      // ignore: use_build_context_synchronously
+    } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error al conectar con el servidor: $error"),
+          content: Text("Error al conectar con el servidor: $e"),
           backgroundColor: Colors.red,
         ),
       );

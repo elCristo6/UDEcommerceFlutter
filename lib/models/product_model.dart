@@ -1,14 +1,19 @@
+import 'dart:typed_data';
+
 class Product {
   final String id;
   final String name;
   final double price;
   final String description;
   final List<int> box;
-  final String imageUrl;
+  final List<String> images;
   final int stock;
   final String category;
   int quantity;
   final DateTime? updatedAt;
+  
+
+  Uint8List? cachedImageBytes;  // bytes precargados de la miniatura
 
   Product({
     required this.id,
@@ -16,11 +21,12 @@ class Product {
     required this.price,
     required this.description,
     this.box = const [],
-    required this.imageUrl,
+    this.images = const [],
     required this.stock,
     required this.category,
     this.quantity = 1,
     this.updatedAt,
+    this.cachedImageBytes, // nuevo
   });
 
   // Método copyWith para crear una copia modificada del producto
@@ -29,24 +35,26 @@ class Product {
     String? name,
     double? price,
     String? description,
-    String? imageUrl,
     int? stock,
     String? category,
     int? quantity,
     List<int>? box,
+    List<String>? images,
     DateTime? updatedAt,
+    Uint8List? cachedImageBytes,
   }) {
     return Product(
       id: id ?? this.id,
       name: name ?? this.name,
       price: price ?? this.price,
       description: description ?? this.description,
-      imageUrl: imageUrl ?? this.imageUrl,
       stock: stock ?? this.stock,
       box: box ?? this.box,
+      images: images ?? this.images,
       category: category ?? this.category,
       quantity: quantity ?? this.quantity,
       updatedAt: updatedAt ?? this.updatedAt,
+      cachedImageBytes: cachedImageBytes ?? this.cachedImageBytes,
     );
   }
 
@@ -64,7 +72,10 @@ class Product {
               .map((e) => int.tryParse(e.toString()) ?? 0)
               .toList()
           : [],
-      imageUrl: json['imageUrl'] ?? '',
+      
+      images: json['images'] != null
+          ? (json['images'] as List<dynamic>).map((e) => e.toString()).toList()
+          : [],
       stock: json['stock'] != null
           ? int.tryParse(json['stock'].toString()) ?? 0
           : 0,
@@ -79,17 +90,21 @@ class Product {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      '_id': id,
+    final data = <String, dynamic>{
       'name': name,
       'price': price,
       'description': description,
       'box': box,
-      'imageUrl': imageUrl,
+      'images': images,
       'stock': stock,
       'category': category,
       'quantity': quantity,
       'updatedAt': updatedAt?.toIso8601String(),
     };
+    // Incluye '_id' solo si no es una cadena vacía.
+    if (id.isNotEmpty) {
+      data['_id'] = id;
+    }
+    return data;
   }
 }

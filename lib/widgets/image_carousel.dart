@@ -24,7 +24,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
   void initState() {
     super.initState();
     // Configura el cambio automático de imágenes
-    Future.delayed(const Duration(seconds: 10), _autoChange);
+    Future.delayed(const Duration(seconds: 4), _autoChange);
   }
 
   void _autoChange() {
@@ -37,7 +37,7 @@ class _ImageCarouselState extends State<ImageCarousel> {
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
       );
-      Future.delayed(const Duration(seconds: 10), _autoChange);
+      Future.delayed(const Duration(seconds: 4), _autoChange);
     }
   }
 
@@ -75,8 +75,8 @@ class _ImageCarouselState extends State<ImageCarousel> {
     return Column(
       children: [
         SizedBox(
-          height: screenHeight * 0.3, // Altura del carrusel
-          width: screenWidth, // Ancho completo
+          height: screenHeight < 600 ? screenHeight * 0.18 : screenHeight * 0.3,
+          width: screenWidth,
           child: Stack(
             children: [
               PageView.builder(
@@ -88,36 +88,41 @@ class _ImageCarouselState extends State<ImageCarousel> {
                 },
                 itemCount: _images.length,
                 itemBuilder: (context, index) {
-                  return Image.asset(
-                    _images[index],
-                    fit: BoxFit.cover,
-                    width: double.infinity,
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.asset(
+                      _images[index],
+                      fit: BoxFit.fill,
+                      width: double.infinity,
+                    ),
                   );
                 },
               ),
-              // Flechas de navegación
-              Positioned(
-                left: 10,
-                top: 0,
-                bottom: 0,
-                child: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
-                  onPressed: _prevPage,
+              // Solo muestra flechas si es escritorio o tablet
+              if (screenWidth > 600)
+                Positioned(
+                  left: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+                    onPressed: _prevPage,
+                  ),
                 ),
-              ),
-              Positioned(
-                right: 10,
-                top: 0,
-                bottom: 0,
-                child: IconButton(
-                  icon:
-                      const Icon(Icons.arrow_forward_ios, color: Colors.white),
-                  onPressed: _nextPage,
+              if (screenWidth > 600)
+                Positioned(
+                  right: 10,
+                  top: 0,
+                  bottom: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.arrow_forward_ios,
+                        color: Colors.white),
+                    onPressed: _nextPage,
+                  ),
                 ),
-              ),
-              // Indicadores (dots)
+              // Dots
               Positioned(
-                bottom: 10, // Posiciona los puntos dentro de la imagen
+                bottom: 10,
                 left: 0,
                 right: 0,
                 child: Row(
@@ -129,8 +134,9 @@ class _ImageCarouselState extends State<ImageCarousel> {
                       width: _currentPage == index ? 12 : 8,
                       height: _currentPage == index ? 12 : 8,
                       decoration: BoxDecoration(
-                        color:
-                            _currentPage == index ? Colors.blue : Colors.grey,
+                        color: _currentPage == index
+                            ? Colors.blue
+                            : Colors.black.withOpacity(0.3),
                         shape: BoxShape.circle,
                       ),
                     ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 
 import '../models/product_model.dart';
 
@@ -26,9 +26,9 @@ class ProductCard extends StatelessWidget {
                 topLeft: Radius.circular(10.0),
                 topRight: Radius.circular(10.0),
               ),
-              child: product.imageUrl.isNotEmpty
+              child: product.images.isNotEmpty
                   ? Image.network(
-                      product.imageUrl,
+                      product.images.first,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           const Icon(Icons.broken_image, size: 50),
@@ -78,6 +78,101 @@ class ProductCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+*/
+
+import 'package:flutter/material.dart';
+
+import '../models/product_model.dart';
+import '../screens/product_detail_screen.dart'; // Asegúrate de importar la pantalla
+
+class ProductCard extends StatelessWidget {
+  final Product product;
+
+  const ProductCard({super.key, required this.product});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProductDetailScreen(product: product),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(10.0),
+      child: Card(
+        margin: const EdgeInsets.all(8.0),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10.0),
+        ),
+        elevation: 4,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Imagen del producto
+            Expanded(
+              flex: 3,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(10.0),
+                  topRight: Radius.circular(10.0),
+                ),
+                child: product.images.isNotEmpty
+                    ? Image.network(
+                        product.images.first,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const Icon(Icons.broken_image, size: 50),
+                      )
+                    : Image.asset(
+                        'assets/placeholder.png',
+                        fit: BoxFit.cover,
+                      ),
+              ),
+            ),
+            // Información del producto
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'COP ${product.price}',
+                    style: const TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Envío gratis',
+                    style: TextStyle(
+                      color: Colors.green,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

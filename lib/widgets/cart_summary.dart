@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../services/pdfService.dart';
 import '../providers/invoice_provider.dart';
 import '../providers/product_provider.dart';
 
@@ -16,6 +16,14 @@ class _CartSummaryState extends State<CartSummary> {
   bool _isFacturaSelected = true;
   bool _isCotizacionSelected = false;
   final TextEditingController _pagaConController = TextEditingController();
+
+ // 👇 Usa una sola instancia para pre-carga + print
+  late final PDFService _pdfService;
+    @override
+  void initState() {
+    super.initState();
+    _pdfService = PDFService();
+  }
 
   String formatCurrency(int value) {
     return value.toString().replaceAllMapped(
@@ -211,6 +219,9 @@ class _CartSummaryState extends State<CartSummary> {
                 }
 
                 try {
+               final localInvoice = invoiceProvider.buildLocalInvoice(productProvider);
+await _pdfService.preloadInvoiceImages(localInvoice);  // 👈 precarga
+
                   if (_isFacturaSelected) {
                     // FACTURA
                     await invoiceProvider.createInvoice(context,

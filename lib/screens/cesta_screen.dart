@@ -19,6 +19,7 @@ class CestaScreen extends StatelessWidget {
             flex: 2,
             child: ProductList(),
           ),
+
           // Segunda columna: Resumen de la cesta
           Expanded(
             flex: 1,

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../widgets/whatsapp_logo_widget.dart'; // Asegúrate de importar el widget creado
+
 class UnderConstructionScreen extends StatelessWidget {
   const UnderConstructionScreen({super.key});
 
@@ -18,8 +20,8 @@ class UnderConstructionScreen extends StatelessWidget {
           ),
           // Botón invisible ubicado en la esquina superior derecha.
           Positioned(
-            top: 10,
-            right: 10,
+            top: 20,
+            right: 20,
             child: Opacity(
               opacity: 0.0, // Lo hace completamente invisible.
               child: ElevatedButton(
@@ -46,6 +48,7 @@ class UnderConstructionScreen extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: const WhatsAppLogoWidget(),
     );
   }
 }

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../models/product_model.dart';
@@ -5,6 +7,11 @@ import '../providers/invoice_provider.dart';
 import '../services/product_service.dart';
 
 class ProductProvider with ChangeNotifier {
+  ProductProvider() {
+    fetchProducts();
+    fetchTopSellingProducts();
+    fetchLeastSellingProducts();
+  }
   List<Product> _products = [];
   List<Product> _cart = [];
   List<Product> _selectedProducts = []; // Lista de productos seleccionados
@@ -17,6 +24,7 @@ class ProductProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _isFiltering = false;
   bool _hasFetchedProducts = false;
+  final ProductService _service = ProductService();
 
   List<Product> get products => _products;
   List<Product> get cart => _cart;
@@ -28,6 +36,60 @@ class ProductProvider with ChangeNotifier {
   Map<Product, double> get modifiedPrices => _modifiedPrices;
 
   Map<Product, int> get quantities => _quantities;
+  List<Product> _topSellingProducts = [];
+  bool _loadingTopSelling = false;
+
+  List<Product> get topSellingProducts => _topSellingProducts;
+  bool get isLoadingTopSelling => _loadingTopSelling;
+  List<Product> _leastSellingProducts = [];
+  bool _loadingLeastSelling = false;
+
+  List<Product> get leastSellingProducts => _leastSellingProducts;
+  bool get isLoadingLeastSelling => _loadingLeastSelling;
+
+  Future<void> fetchLeastSellingProducts() async {
+    _loadingLeastSelling = true;
+    notifyListeners();
+    try {
+      _leastSellingProducts = await _service.getLeastSellingProducts();
+    } catch (e) {
+      _leastSellingProducts = [];
+    }
+    _loadingLeastSelling = false;
+    notifyListeners();
+  }
+
+  Future<void> fetchTopSellingProducts() async {
+    _loadingTopSelling = true;
+    notifyListeners();
+    try {
+      _topSellingProducts = await _service.fetchTopSellingProducts();
+    } catch (e) {
+      _topSellingProducts = [];
+    }
+    _loadingTopSelling = false;
+    notifyListeners();
+  }
+
+  /// Sube todas las imágenes de una sola vez y refresca la lista.
+  Future<void> uploadProductImages(
+      String productId, List<Uint8List> images) async {
+    // Generamos un nombre único para cada fichero
+    final filenames = List<String>.generate(
+      images.length,
+      (i) => 'img_${DateTime.now().millisecondsSinceEpoch}_$i.png',
+    );
+
+    // 1) enviamos un solo request multipart con todas
+    await _productService.uploadProductImagesBatch(
+      productId,
+      images,
+      filenames,
+    );
+
+    // 2) refrescamos nuestra lista en memoria
+    await fetchProducts(forceUpdate: true);
+  }
 
   /// Limpia todo el carrito y reinicia cantidades
   void clearCart() {
@@ -200,6 +262,19 @@ class ProductProvider with ChangeNotifier {
       notifyListeners();
     } catch (error) {
       // Handle error
+    }
+  }
+
+  /// Elimina una URL de imagen tanto en el backend como en memoria
+  Future<void> deleteProductImage(String productId, String imageUrl) async {
+    // 1) pide al service que la borre
+    final updated = await _service.deleteProductImage(productId, imageUrl);
+
+    // 2) actualiza la lista local
+    final idx = _products.indexWhere((p) => p.id == productId);
+    if (idx != -1) {
+      _products[idx] = updated;
+      notifyListeners();
     }
   }
 }

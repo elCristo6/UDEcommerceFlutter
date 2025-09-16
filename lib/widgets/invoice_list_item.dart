@@ -28,6 +28,7 @@ class InvoiceListItem extends StatelessWidget {
         : "Factura";
     final String cliente =
         invoice.user?.name != null ? invoice.user!.name : "Cliente";
+    //print("📦 Nombre cliente renderizado: ${invoice.user?.name}");
     final String totalText = "\$${_formatCurrency(invoice.totalAmount)}";
     final String pagaConText = "\$${_formatCurrency(invoice.pagaCon)}";
     final String cambioText = "\$${_formatCurrency(invoice.cambio)}";

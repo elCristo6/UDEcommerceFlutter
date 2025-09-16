@@ -4,6 +4,7 @@ class User {
   final String email;
   final String phone;
   final String nit;
+  final String role;
 
   User({
     required this.id,
@@ -11,23 +12,27 @@ class User {
     required this.email,
     required this.phone,
     required this.nit,
+    required this.role,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['_id'] ?? '',
-      name: json['name'] ?? '',
-      email: json['email'] ?? '',
-      phone: json['phoneNumber'] ?? '',
-      nit: json['nit'] ?? '',
+      id: json['_id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      phone: (json['phone'] ?? json['phoneNumber'] ?? '').toString(),
+      nit: (json['nit'] ?? json['cc'] ?? '').toString(),
+      role: json['role']?.toString() ?? 'user',
     );
   }
+
   User copyWith({
     String? id,
     String? name,
     String? email,
     String? phone,
     String? nit,
+    String? role,
   }) {
     return User(
       id: id ?? this.id,
@@ -35,16 +40,18 @@ class User {
       email: email ?? this.email,
       phone: phone ?? this.phone,
       nit: nit ?? this.nit,
+      role: role ?? this.role,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'id': id.isNotEmpty ? id : "N/A",
-      'name': name.isNotEmpty ? name : "Cliente",
+      '_id': id,
+      'name': name,
       'email': email,
       'phone': phone,
       'nit': nit,
+      'role': role,
     };
   }
 }

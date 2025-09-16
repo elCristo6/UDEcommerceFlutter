@@ -7,9 +7,11 @@ import '../providers/product_provider.dart';
 class ProductCreateModal extends StatefulWidget {
   final Function(Product createdProduct) onSave;
 
+  // ignore: use_super_parameters
   const ProductCreateModal({Key? key, required this.onSave}) : super(key: key);
 
   @override
+  // ignore: library_private_types_in_public_api
   _ProductCreateModalState createState() => _ProductCreateModalState();
 }
 
@@ -23,7 +25,7 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
   late TextEditingController _stockController;
   late TextEditingController _categoryController;
   late TextEditingController _boxController;
-  late TextEditingController _imageUrlController;
+
 
   @override
   void initState() {
@@ -34,7 +36,8 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
     _stockController = TextEditingController();
     _categoryController = TextEditingController();
     _boxController = TextEditingController();
-    _imageUrlController = TextEditingController();
+    
+
   }
 
   @override
@@ -45,12 +48,12 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
     _stockController.dispose();
     _categoryController.dispose();
     _boxController.dispose();
-    _imageUrlController.dispose();
+    
     super.dispose();
   }
 
   Future<void> _createProduct() async {
-    // Se crea un nuevo producto; para el id se envía una cadena vacía, ya que el servidor generará el ID.
+    // Se crea un nuevo producto; se envía un id vacío ya que el servidor lo genera.
     final newProduct = Product(
       id: '',
       name: _nameController.text,
@@ -64,7 +67,7 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
               .map((s) => int.tryParse(s.trim()) ?? 0)
               .toList()
           : [],
-      imageUrl: _imageUrlController.text,
+          
       stock: _stockController.text.isNotEmpty
           ? int.tryParse(_stockController.text) ?? 0
           : 0,
@@ -74,13 +77,13 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
     );
 
     try {
-      // Llamamos al método addProduct del ProductProvider (que realiza la petición POST)
+      // Se llama al método addProduct del provider, el cual realiza la petición POST al API.
       await Provider.of<ProductProvider>(context, listen: false)
           .addProduct(newProduct);
-      // Opcional: refrescar la lista de productos
+      // Luego se refresca la lista de productos para reflejar el cambio.
       await Provider.of<ProductProvider>(context, listen: false)
           .fetchProducts(forceUpdate: true);
-      // Notificar al widget padre y cerrar el modal.
+      // Se notifica al widget padre y se cierra el modal.
       widget.onSave(newProduct);
       Navigator.of(context).pop();
     } catch (error) {
@@ -97,7 +100,7 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
-          // No incluimos validadores obligatorios para permitir campos vacíos.
+          // No se imponen validadores para permitir campos vacíos.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -128,10 +131,6 @@ class _ProductCreateModalState extends State<ProductCreateModal> {
                 controller: _boxController,
                 decoration: const InputDecoration(
                     labelText: 'Caja (separar por comas)'),
-              ),
-              TextFormField(
-                controller: _imageUrlController,
-                decoration: const InputDecoration(labelText: 'URL de Imagen'),
               ),
             ],
           ),

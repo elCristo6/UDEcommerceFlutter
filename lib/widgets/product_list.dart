@@ -16,6 +16,10 @@ class ProductList extends StatefulWidget {
 }
 
 class _ProductListState extends State<ProductList> {
+  final _nameCtrl = TextEditingController();
+  final _nitCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
+
   String formatCurrency(int value) {
     return value.toString().replaceAllMapped(
         RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (Match match) => '${match[1]}.');
@@ -55,12 +59,16 @@ class _ProductListState extends State<ProductList> {
   @override
   void dispose() {
     _searchFocusNode.dispose(); // Limpia el FocusNode al desmontar el widget
+    _nameCtrl.dispose();
+    _nitCtrl.dispose();
+    _phoneCtrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final productProvider = Provider.of<ProductProvider>(context);
+    final invoiceProvider = Provider.of<InvoiceProvider>(context);
 
     return GestureDetector(
       onTap: () {
@@ -90,20 +98,18 @@ class _ProductListState extends State<ProductList> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 3.0),
                         child: TextField(
+                          controller: _nameCtrl,
                           onChanged: (value) {
-                            final invoiceProvider =
-                                Provider.of<InvoiceProvider>(context,
-                                    listen: false);
-                            // Actualiza el nombre del usuario actual
-                            final currentUser = invoiceProvider.currentUser ??
+                            final current = invoiceProvider.currentUser ??
                                 User(
                                     id: '',
                                     name: '',
                                     email: '',
                                     phone: '',
-                                    nit: '');
-                            invoiceProvider.setCurrentUser(
-                                currentUser.copyWith(name: value));
+                                    nit: '',
+                                    role: '');
+                            invoiceProvider
+                                .setCurrentUser(current.copyWith(name: value));
                           },
                           decoration: InputDecoration(
                             labelText: 'Nombre',
@@ -130,19 +136,18 @@ class _ProductListState extends State<ProductList> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         child: TextField(
+                          controller: _nitCtrl, // <-- usa controlador
                           onChanged: (value) {
-                            final invoiceProvider =
-                                Provider.of<InvoiceProvider>(context,
-                                    listen: false);
-                            final currentUser = invoiceProvider.currentUser ??
+                            final current = invoiceProvider.currentUser ??
                                 User(
                                     id: '',
                                     name: '',
                                     email: '',
                                     phone: '',
-                                    nit: '');
-                            invoiceProvider.setCurrentUser(
-                                currentUser.copyWith(nit: value));
+                                    nit: '',
+                                    role: '');
+                            invoiceProvider
+                                .setCurrentUser(current.copyWith(nit: value));
                           },
                           decoration: InputDecoration(
                             labelText: 'NIT',
@@ -167,19 +172,50 @@ class _ProductListState extends State<ProductList> {
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
                         child: TextField(
+                          controller: _phoneCtrl, // <-- usa controlador
+                          keyboardType: TextInputType.phone,
                           onChanged: (value) {
-                            final invoiceProvider =
-                                Provider.of<InvoiceProvider>(context,
-                                    listen: false);
-                            final currentUser = invoiceProvider.currentUser ??
+                            final current = invoiceProvider.currentUser ??
                                 User(
                                     id: '',
                                     name: '',
                                     email: '',
                                     phone: '',
-                                    nit: '');
-                            invoiceProvider.setCurrentUser(
-                                currentUser.copyWith(phone: value));
+                                    nit: '',
+                                    role: '');
+                            invoiceProvider
+                                .setCurrentUser(current.copyWith(phone: value));
+                          },
+                          onSubmitted: (value) async {
+                            // Al presionar Enter: buscar por teléfono
+                            final phone = value.trim();
+                            if (phone.isEmpty) return;
+
+                            final user =
+                                await invoiceProvider.fetchUserByPhone(phone);
+
+                            if (user != null) {
+                              // Rellenar campos
+                              _nameCtrl.text = user.name;
+                              _nitCtrl.text = user.nit;
+                              _phoneCtrl.text = user.phone;
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(
+                                          'Cliente encontrado: ${user.name}')),
+                                );
+                              }
+                            } else {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'No se encontró cliente con ese teléfono')),
+                                );
+                              }
+                            }
                           },
                           decoration: InputDecoration(
                             labelText: 'Telefono',
@@ -346,14 +382,28 @@ class _ProductListState extends State<ProductList> {
                                           8), // Espaciado entre el checkbox y la imagen
 
                                   // Imagen del producto
-                                  product.imageUrl.isNotEmpty
+
+                                  product.images.isNotEmpty
                                       ? Image.network(
-                                          product.imageUrl,
+                                          Uri.encodeFull(product.images.first),
                                           fit: BoxFit.cover,
                                           width: 50,
                                           height: 50,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            print(
+                                                "Error al cargar la imagen: ${product.images.first}");
+                                            return const Icon(
+                                                Icons.broken_image,
+                                                size: 50);
+                                          },
                                         )
-                                      : const Icon(Icons.image, size: 50),
+                                      : (() {
+                                          print(
+                                              "No se encontraron imágenes para el producto: ${product.name}");
+                                          return const Icon(Icons.image,
+                                              size: 50);
+                                        }())
                                 ],
                               ),
                               title: Text(product.name),
@@ -499,12 +549,19 @@ class _ProductListState extends State<ProductList> {
                         child: Card(
                           margin: const EdgeInsets.symmetric(vertical: 4.0),
                           child: ListTile(
-                              leading: product.imageUrl.isNotEmpty
+                              leading: product.images.isNotEmpty
                                   ? Image.network(
-                                      product.imageUrl,
+                                      Uri.encodeFull(product.images.first),
                                       fit: BoxFit.cover,
                                       width: 50,
                                       height: 50,
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                        print(
+                                            "Error al cargar la imagen: ${product.images.first}");
+                                        return const Icon(Icons.broken_image,
+                                            size: 50);
+                                      },
                                     )
                                   : const Icon(Icons.image, size: 50),
                               title: Text(product.name),

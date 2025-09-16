@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../providers/product_provider.dart';
 import '../widgets/image_carousel.dart';
+import '../widgets/least_selling_carousel.dart';
 import '../widgets/product_card.dart';
 import '../widgets/search_bar.dart' as custom;
+import '../widgets/top_selling_carousel.dart'; // Importar
+import '../widgets/whatsapp_logo_widget.dart'; // Asegúrate de importar el widget creado
 
 class HomeScreen extends StatelessWidget {
   // ignore: use_super_parameters
@@ -13,17 +16,33 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const custom.SearchBar(),
+      // appBar: const custom.SearchBar(),
+      appBar: custom.SearchBar(
+        onSubmitted: (query) {
+          Provider.of<ProductProvider>(context, listen: false)
+              .filterProducts(query);
+          Navigator.pushNamed(
+            context,
+            '/infoProducts',
+            arguments: query,
+          );
+        },
+      ),
+
       body: ListView(
         children: [
           // Carrusel de imágenes
+
           SizedBox(
             height: MediaQuery.of(context).size.height * 0.3,
             child: ImageCarousel(),
           ),
           const SizedBox(
               height: 10), // Espaciado entre el carrusel y los productos
+          const TopSellingCarousel(),
 
+          const SizedBox(height: 10),
+          const LeastSellingCarousel(),
           // Productos destacados
           Consumer<ProductProvider>(
             builder: (context, productProvider, child) {
@@ -48,11 +67,12 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8.0),
                 itemCount:
                     visibleProducts.length, // Mostrar solo productos limitados
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 6, // Seis productos por fila
-                  childAspectRatio: 0.75, // Relación de aspecto ajustada
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent:
+                      180, // Cada tarjeta medirá máximo 180px de ancho
+                  childAspectRatio: 0.75,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
                 ),
                 itemBuilder: (context, index) {
                   final product = visibleProducts[index];
@@ -78,6 +98,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
+      floatingActionButton: const WhatsAppLogoWidget(),
     );
   }
 }
