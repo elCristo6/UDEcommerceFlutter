@@ -1,8 +1,10 @@
+/*
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/pdfService.dart';
+
+import '../providers/cart_provider.dart';
 import '../providers/invoice_provider.dart';
-import '../providers/product_provider.dart';
 
 class CartSummary extends StatefulWidget {
   const CartSummary({super.key});
@@ -12,34 +14,33 @@ class CartSummary extends StatefulWidget {
 }
 
 class _CartSummaryState extends State<CartSummary> {
-  // Por defecto se selecciona "Factura de venta"
   bool _isFacturaSelected = true;
   bool _isCotizacionSelected = false;
-  final TextEditingController _pagaConController = TextEditingController();
 
- // 👇 Usa una sola instancia para pre-carga + print
-  late final PDFService _pdfService;
-    @override
-  void initState() {
-    super.initState();
-    _pdfService = PDFService();
-  }
+  final TextEditingController _pagaConController = TextEditingController();
 
   String formatCurrency(int value) {
     return value.toString().replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-          (Match match) => '${match[1]}.',
+          (Match m) => '${m[1]}.',
         );
   }
 
-  bool isWeb() {
-    return identical(0, 0.0);
+  @override
+  void dispose() {
+    _pagaConController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final productProvider = Provider.of<ProductProvider>(context);
     final invoiceProvider = Provider.of<InvoiceProvider>(context);
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+
+    // Solo para validar si hay selección al dar "Continuar"
+    final selectedItems =
+        invoiceProvider.resolveSelectedItemsFromCart(cartProvider.cart);
+    final subtotal = invoiceProvider.subtotal;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -48,10 +49,9 @@ class _CartSummaryState extends State<CartSummary> {
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
           BoxShadow(
-            // ignore: deprecated_member_use
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withOpacity(0.08),
             spreadRadius: 2,
-            blurRadius: 5,
+            blurRadius: 6,
             offset: const Offset(0, 3),
           ),
         ],
@@ -59,209 +59,155 @@ class _CartSummaryState extends State<CartSummary> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ======== Título "Resumen" ========
           const Text(
             'Resumen',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
+
           const SizedBox(height: 16),
 
-          // ======== Subtotal ========
+          // ==================== SUBTOTAL ====================
           _buildSummaryRow(
             'Subtotal',
-            'COP ${formatCurrency(productProvider.selectedTotal.toInt())}',
+            'COP ${formatCurrency(subtotal.toInt())}',
           ),
 
-          // ======== Paga con ========
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Paga con:',
-                  style: TextStyle(fontSize: 14, color: Colors.black),
+          const SizedBox(height: 10),
+
+          // ==================== PAGA CON (SIN BORDE) ====================
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Paga con:'),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                SizedBox(
-                  width: 100,
-                  child: TextField(
-                    controller: _pagaConController,
-                    textAlign: TextAlign.right,
-                    keyboardType: TextInputType.number,
-                    style: const TextStyle(fontSize: 14),
-                    onChanged: (value) {
-                      final double pagaCon = double.tryParse(value) ?? 0.0;
-                      invoiceProvider.setPagaCon(pagaCon, context);
-                    },
-                    decoration: const InputDecoration(
-                      hintText: 'COP',
-                      hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
-                      contentPadding: EdgeInsets.symmetric(
-                        horizontal: 12.0,
-                        vertical: 4.0,
-                      ),
-                      border: OutlineInputBorder(
-                        borderSide: BorderSide.none,
-                      ),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
+                width: 130,
+                child: TextField(
+                  controller: _pagaConController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.right,
+                  onChanged: (value) {
+                    final pagaCon = double.tryParse(value) ?? 0.0;
+                    // 🔥 Cambio se actualiza en vivo
+                    invoiceProvider.setPagaCon(pagaCon);
+                  },
+                  decoration: const InputDecoration(
+                    hintText: 'COP',
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
                   ),
+                  style: const TextStyle(fontSize: 14),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
 
-          // ======== Cambio ========
+          const SizedBox(height: 10),
+
+          // ==================== CAMBIO ====================
           _buildSummaryRow(
             'Cambio:',
             'COP ${formatCurrency(invoiceProvider.cambio.toInt())}',
             isNegative: invoiceProvider.cambio < 0,
           ),
 
-          const Divider(thickness: 1, height: 20),
+          const Divider(height: 30),
 
-          // ======== TOTAL ========
+          // ==================== TOTAL ====================
           _buildSummaryRow(
             'TOTAL:',
-            'COP ${formatCurrency(productProvider.selectedTotal.toInt())}',
+            'COP ${formatCurrency(subtotal.toInt())}',
             isBold: true,
             isLarge: true,
           ),
-          const SizedBox(height: 10),
 
-          // ======== Medio de pago ========
-          const Text(
-            'Medio de pago:',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 9,
-            runSpacing: 10,
-            children: [
-              _buildPaymentOption(context, invoiceProvider, 'Efectivo'),
-              _buildPaymentOption(context, invoiceProvider, 'Nequi'),
-              _buildPaymentOption(context, invoiceProvider, 'Daviplata'),
-              _buildPaymentOption(context, invoiceProvider, 'Bancolombia'),
-            ],
-          ),
           const SizedBox(height: 20),
 
-          // =====================================================
-          //            CHECKBOXES Factura o Cotización
-          // =====================================================
+          const Text(
+            'Medio de pago:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 10),
+
+          Wrap(
+            spacing: 10,
+            children: [
+              _buildPaymentOption(invoiceProvider, 'Efectivo'),
+              _buildPaymentOption(invoiceProvider, 'Nequi'),
+              _buildPaymentOption(invoiceProvider, 'Daviplata'),
+              _buildPaymentOption(invoiceProvider, 'Bancolombia'),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ==================== FACTURA / COTIZACIÓN ====================
           Row(
             children: [
-              // Checkbox para FACTURA
               Checkbox(
                 value: _isFacturaSelected,
-                onChanged: (bool? newValue) {
+                onChanged: (_) {
                   setState(() {
                     _isFacturaSelected = true;
                     _isCotizacionSelected = false;
                   });
                 },
               ),
-              const Text(
-                'Factura de venta',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
+              const Text('Factura de venta'),
               const SizedBox(width: 20),
-
-              // Checkbox para COTIZACIÓN
               Checkbox(
                 value: _isCotizacionSelected,
-                onChanged: (bool? newValue) {
+                onChanged: (_) {
                   setState(() {
                     _isCotizacionSelected = true;
                     _isFacturaSelected = false;
                   });
                 },
               ),
-              const Text(
-                'Cotización',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black,
-                ),
-              ),
+              const Text('Cotización'),
             ],
           ),
 
-          // ======== Botón Continuar ========
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
+
+          // ==================== BOTÓN FINALIZAR ====================
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
               onPressed: () async {
-                if (productProvider.selectedProducts.isEmpty) {
+                if (selectedItems.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content:
-                          Text('Por favor selecciona al menos un producto.'),
+                      content: Text('No hay productos seleccionados.'),
                     ),
                   );
                   return;
                 }
 
                 try {
-               final localInvoice = invoiceProvider.buildLocalInvoice(productProvider);
-await _pdfService.preloadInvoiceImages(localInvoice);  // 👈 precarga
-
                   if (_isFacturaSelected) {
-                    // FACTURA
-                    await invoiceProvider.createInvoice(context,
-                        docType: 'FACTURA DE COMPRA');
+                    await invoiceProvider.createInvoiceFromCart(context);
                   } else {
-                    // COTIZACIÓN
-                    await invoiceProvider.generatePdfLocal(context,
-                        docType: 'COTIZACIÓN');
+                    await invoiceProvider.generatePdfFromCart(context);
                   }
-                  // Si todo sale bien, limpiamos los datos:
-                  invoiceProvider.clearAllData();
-                  productProvider.clearCart();
-                  setState(() {
-                    // Restablece el estado predeterminado
-                    _isFacturaSelected = true;
-                    _isCotizacionSelected = false;
-                    _pagaConController.clear();
-                  });
-                } catch (error) {
-                  // ignore: use_build_context_synchronously
+
+                  // 🔥 el provider ya limpia selección y totales
+                  _pagaConController.clear();
+                } catch (e) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $error')),
+                    SnackBar(content: Text('Error: $e')),
                   );
                 }
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 14.0),
-              ),
-              child: const Text(
-                'Continuar',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
+              child: const Text('Continuar'),
             ),
           ),
         ],
@@ -269,9 +215,10 @@ await _pdfService.preloadInvoiceImages(localInvoice);  // 👈 precarga
     );
   }
 
-  // =====================================================
-  //                 MÉTODOS PRIVADOS
-  // =====================================================
+  // ================================================================
+  // MÉTODOS PRIVADOS
+  // ================================================================
+
   Widget _buildSummaryRow(
     String title,
     String value, {
@@ -279,25 +226,254 @@ await _pdfService.preloadInvoiceImages(localInvoice);  // 👈 precarga
     bool isLarge = false,
     bool isNegative = false,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: isLarge ? 18 : 14,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: Colors.black,
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: isLarge ? 18 : 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: isLarge ? 18 : 14,
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-              color: isNegative ? Colors.red : Colors.black,
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isLarge ? 18 : 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: isNegative ? Colors.red : Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentOption(InvoiceProvider provider, String label) {
+    final isSelected = provider.medioPago == label;
+
+    return GestureDetector(
+      onTap: () => provider.setMedioPago(label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.blue : Colors.grey[700],
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+}
+*/
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/cart_provider.dart';
+import '../providers/invoice_provider.dart';
+
+class CartSummary extends StatefulWidget {
+  const CartSummary({super.key});
+
+  @override
+  State<CartSummary> createState() => _CartSummaryState();
+}
+
+class _CartSummaryState extends State<CartSummary> {
+  bool _isFacturaSelected = true;
+  bool _isCotizacionSelected = false;
+
+  final TextEditingController _pagaConController = TextEditingController();
+
+  String formatCurrency(int value) {
+    return value.toString().replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]}.',
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final invoiceProvider = Provider.of<InvoiceProvider>(context);
+    final cartProvider = Provider.of<CartProvider>(context);
+
+    // Resolvemos items seleccionados desde el provider (por si quieres validar)
+    final selectedItems =
+        invoiceProvider.resolveSelectedItemsFromCart(cartProvider.cart);
+
+    final subtotal = invoiceProvider.subtotal;
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.08),
+            spreadRadius: 2,
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Resumen',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 16),
+
+          // ==================== SUBTOTAL ====================
+          _buildSummaryRow(
+            'Subtotal',
+            'COP ${formatCurrency(subtotal.toInt())}',
+          ),
+
+          const SizedBox(height: 10),
+
+          // ==================== PAGA CON ====================
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Paga con:'),
+              SizedBox(
+                width: 120,
+                child: TextField(
+                  controller: _pagaConController,
+                  keyboardType: TextInputType.number,
+                  textAlign: TextAlign.right,
+                  onChanged: (value) {
+                    final pagaCon = double.tryParse(value) ?? 0.0;
+                    invoiceProvider.setPagaCon(pagaCon); // cambio en vivo
+                  },
+                  decoration: const InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    hintText: 'COP',
+                    isDense: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                  ),
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 10),
+
+          // ==================== CAMBIO ====================
+          _buildSummaryRow(
+            'Cambio:',
+            'COP ${formatCurrency(invoiceProvider.cambio.toInt())}',
+            isNegative: invoiceProvider.cambio < 0,
+          ),
+
+          const Divider(height: 30),
+
+          // ==================== TOTAL ====================
+          _buildSummaryRow(
+            'TOTAL:',
+            'COP ${formatCurrency(subtotal.toInt())}',
+            isBold: true,
+            isLarge: true,
+          ),
+
+          const SizedBox(height: 20),
+
+          const Text(
+            'Medio de pago:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+
+          const SizedBox(height: 10),
+
+          Wrap(
+            spacing: 10,
+            children: [
+              _buildPaymentOption(invoiceProvider, 'Efectivo'),
+              _buildPaymentOption(invoiceProvider, 'Nequi'),
+              _buildPaymentOption(invoiceProvider, 'Daviplata'),
+              _buildPaymentOption(invoiceProvider, 'Bancolombia'),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ==================== FACTURA / COTIZACIÓN ====================
+          Row(
+            children: [
+              Checkbox(
+                value: _isFacturaSelected,
+                onChanged: (_) {
+                  setState(() {
+                    _isFacturaSelected = true;
+                    _isCotizacionSelected = false;
+                  });
+                },
+              ),
+              const Text('Factura de venta'),
+              const SizedBox(width: 20),
+              Checkbox(
+                value: _isCotizacionSelected,
+                onChanged: (_) {
+                  setState(() {
+                    _isCotizacionSelected = true;
+                    _isFacturaSelected = false;
+                  });
+                },
+              ),
+              const Text('Cotización'),
+            ],
+          ),
+
+          const SizedBox(height: 20),
+
+          // ==================== BOTÓN FINALIZAR ====================
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () async {
+                if (selectedItems.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('No hay productos seleccionados.'),
+                    ),
+                  );
+                  return;
+                }
+
+                try {
+                  if (_isFacturaSelected) {
+                    await invoiceProvider.createInvoiceFromCart(context);
+                  } else {
+                    await invoiceProvider.generatePdfFromCart(context);
+                  }
+
+                  // El provider ya limpia selección y totales en clearSelections()
+                  _pagaConController.clear();
+                } catch (e) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  );
+                }
+              },
+              child: const Text('Continuar'),
             ),
           ),
         ],
@@ -305,27 +481,53 @@ await _pdfService.preloadInvoiceImages(localInvoice);  // 👈 precarga
     );
   }
 
-  Widget _buildPaymentOption(
-    BuildContext context,
-    InvoiceProvider invoiceProvider,
-    String label,
-  ) {
-    final isSelected = invoiceProvider.medioPago == label;
+  // ================================================================
+  // MÉTODOS PRIVADOS
+  // ================================================================
+
+  Widget _buildSummaryRow(
+    String title,
+    String value, {
+    bool isBold = false,
+    bool isLarge = false,
+    bool isNegative = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: isLarge ? 18 : 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: isLarge ? 18 : 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            color: isNegative ? Colors.red : Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPaymentOption(InvoiceProvider provider, String label) {
+    final isSelected = provider.medioPago == label;
 
     return GestureDetector(
-      onTap: () {
-        invoiceProvider.setMedioPago(label);
-      },
+      onTap: () => provider.setMedioPago(label),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.blue : Colors.grey[800],
+          color: isSelected ? Colors.blue : Colors.grey[700],
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           label,
           style: const TextStyle(
-            fontSize: 14,
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),

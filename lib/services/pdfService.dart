@@ -67,7 +67,7 @@ class PDFService {
   }) async {
     try {
       // Logo
-      final logoData = await rootBundle.load('assets/UDSinfondo.png');
+      final logoData = await rootBundle.load('assets/LogoPDF.png');
       final logoBytes = logoData.buffer.asUint8List();
       final logoBitmap = PdfBitmap(logoBytes);
 
@@ -83,12 +83,12 @@ class PDFService {
       final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 10,
           style: PdfFontStyle.bold);
       final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 10);
-      final tableHeaderColor = PdfColor(220, 240, 255);
+      final tableHeaderColor = PdfColor(350, 270, 255);
 
-      double top = 20;
+      double top = 10;
 
       // Logo
-      graphics.drawImage(logoBitmap, Rect.fromLTWH(20, top, 120, 70));
+      graphics.drawImage(logoBitmap, Rect.fromLTWH(20, top - 20, 120, 120));
       // Empresa
       graphics.drawString(
         '''

@@ -2,6 +2,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:jwt_decoder/jwt_decoder.dart';
 
 import '../config/api_config.dart';
 import '../models/user_model.dart';
@@ -16,16 +17,22 @@ class AuthService {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      final token = data['token'];
+
+      // ✅ Decodificar el token para extraer el ID
+      final decodedToken = JwtDecoder.decode(token);
+      final userId = decodedToken['id'] ?? '';
+
       return {
         'user': User(
-          id: '',
+          id: userId,
           name: data['name'] ?? '',
           email: email,
           phone: '',
           nit: '',
           role: data['role'] ?? 'user',
         ),
-        'token': data['token'],
+        'token': token,
         'role': data['role'] ?? 'user',
       };
     } else {

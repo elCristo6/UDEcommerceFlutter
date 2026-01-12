@@ -1,3 +1,5 @@
+/*
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -5,10 +7,12 @@ import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
 import '../config/api_config.dart';
-import '../models/invoice_model.dart'; // Modelo de factura
+import '../models/cart_model.dart';
+import '../models/invoice_model.dart';
 import '../models/product_model.dart';
-import '../models/user_model.dart'; // Modelo de usuario
-import '../providers/product_provider.dart'; // Proveedor de productos
+import '../models/user_model.dart';
+import '../providers/cart_provider.dart';
+import '../providers/product_provider.dart';
 import '../services/invoice_service.dart';
 import '../services/pdfService.dart';
 
@@ -16,25 +20,71 @@ class InvoiceProvider with ChangeNotifier {
   final String _baseUrl = "${ApiConfig.baseUrl}/newBill";
   final InvoiceService _invoiceService = InvoiceService();
 
-  // ================== CAMPOS ==================
+  // ========================= CAMPOS =========================
   User? _currentUser;
+
   String _medioPago = 'Efectivo';
   double _pagaCon = 0.0;
   double _cambio = 0.0;
 
-  // Lista para almacenar facturas creadas (opcional)
+  /// IDs de productos seleccionados en el carrito
+  Set<String> _selectedProductIds = {};
+
   final List<Invoice> _invoices = [];
   List<Invoice> _todaysSales = [];
 
-  // ================== GETTERS ==================
+  double _subtotal = 0.0;
+
+  // ========================= GETTERS =========================
   User? get currentUser => _currentUser;
   String get medioPago => _medioPago;
   double get pagaCon => _pagaCon;
   double get cambio => _cambio;
   List<Invoice> get invoices => _invoices;
   List<Invoice> get todaysSales => _todaysSales;
+  Set<String> get selectedProductIds => _selectedProductIds;
+  double get subtotal => _subtotal;
 
-  // ================== SETTERS ==================
+  /// Compatibilidad con código viejo
+  List<String> get selectedCartItems => _selectedProductIds.toList();
+
+  // ========================= LÓGICA DE TOTALES =========================
+  void _recalcCambio() {
+    _cambio = _pagaCon - _subtotal;
+  }
+
+  /// 🔥 Usado por la UI del carrito para recalcular SIEMPRE el subtotal
+  /// usando appliedPrice si existe, o product.price si no.
+  void recalculateFromCart(Cart? cart) {
+    if (cart == null || _selectedProductIds.isEmpty) {
+      _subtotal = 0.0;
+      _recalcCambio();
+      notifyListeners();
+      return;
+    }
+
+    final selectedItems = resolveSelectedItemsFromCart(cart);
+
+    final double newSubtotal = selectedItems.fold<double>(0.0, (sum, item) {
+      final num priceNum =
+          item.appliedPrice > 0 ? item.appliedPrice : item.product.price;
+      final double price = priceNum.toDouble();
+      return sum + price * item.quantity;
+    });
+
+    _subtotal = newSubtotal;
+    _recalcCambio();
+    notifyListeners();
+  }
+
+  /// Compatibilidad con UI antigua (cuando calculan el subtotal afuera)
+  void updateTotals(double value) {
+    _subtotal = value;
+    _recalcCambio();
+    notifyListeners();
+  }
+
+  // ========================= SETTERS =========================
   void setCurrentUser(User user) {
     _currentUser = user;
     notifyListeners();
@@ -45,66 +95,34 @@ class InvoiceProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setPagaCon(double amount, BuildContext context) {
-    final productProvider =
-        Provider.of<ProductProvider>(context, listen: false);
-    _pagaCon = amount;
-    _cambio = _pagaCon - selectedTotal(productProvider);
+  /// 🔥 Actualiza el "pagaCon" y recalcula inmediatamente el cambio
+  void setPagaCon(double value) {
+    _pagaCon = value;
+    _recalcCambio();
     notifyListeners();
   }
 
-  // ================== MÉTODOS AUXILIARES ==================
-  /// Calcula el total basándose en los productos seleccionados y sus precios/cantidades.
-  double selectedTotal(ProductProvider productProvider) {
-    return productProvider.selectedProducts.fold(0.0, (sum, product) {
-      final quantity = productProvider.quantities[product] ?? 1;
-      final price = productProvider.modifiedPrices[product] ?? product.price;
-      return sum + (price * quantity);
-    });
+  /// Recibe los items seleccionados y guarda SOLO sus IDs
+  void setSelectedCartItems(List<CartItem> items) {
+    _selectedProductIds = items.map((e) => e.product.id).toSet();
+    notifyListeners();
   }
 
-  /// Notifica cambios de subtotal para actualizar la UI
+  /// Devuelve los CartItem seleccionados según _selectedProductIds
+  List<CartItem> resolveSelectedItemsFromCart(Cart? cart) {
+    if (cart == null) return [];
+    if (_selectedProductIds.isEmpty) return [];
+    return cart.items
+        .where((item) => _selectedProductIds.contains(item.product.id))
+        .toList();
+  }
+
+  // ============= COMPATIBILIDAD CON UI ANTIGUA (no borrar) =============
   void updateSubtotal(ProductProvider productProvider) {
     notifyListeners();
   }
 
-  // ================== FACTURA LOCAL (SIN SERVIDOR) ==================
-  /// Construye un objeto Invoice en local con todos los datos que el usuario ingresó.
-  Invoice buildLocalInvoice(ProductProvider productProvider) {
-    // Construye la lista de productos con nombre, cantidad y precio actualizados
-    final List<Product> selectedProds =
-        productProvider.selectedProducts.map((product) {
-      final quantity = productProvider.quantities[product] ?? 1;
-      final price = productProvider.modifiedPrices[product] ?? product.price;
-      return Product(
-        id: product.id,
-        name: product.name,
-        price: price,
-        description: product.description,
-        stock: product.stock,
-        category: product.category,
-        images: List<String>.from(product.images),
-        cachedImageBytes: product.cachedImageBytes,
-        quantity: quantity,
-      );
-    }).toList();
-
-    // Crea la factura local con todos los datos del usuario y productos seleccionados
-    return Invoice(
-      id: 'local-invoice', // O un ID ficticio/único
-      user: _currentUser, // Datos completos del cliente
-      userId: null, // Si no tienes ID local, pon null
-      products: selectedProds,
-      totalAmount: selectedTotal(productProvider),
-      medioPago: _medioPago,
-      pagaCon: _pagaCon,
-      cambio: _cambio,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-  }
-
-// En invoice_provider.dart
+  // ========================= USUARIOS =========================
   Future<User?> fetchUserByPhone(String phone) async {
     try {
       final sanitized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
@@ -114,259 +132,856 @@ class InvoiceProvider with ChangeNotifier {
       if (resp.statusCode == 200) {
         final raw = jsonDecode(resp.body);
 
-        // Tu API puede responder como { ...usuario } o { "data": { ...usuario } }
         final Map<String, dynamic>? map =
             (raw is Map<String, dynamic> && raw['data'] is Map<String, dynamic>)
-                ? (raw['data'] as Map<String, dynamic>)
+                ? raw['data']
                 : (raw is Map<String, dynamic> ? raw : null);
 
         if (map == null) return null;
 
-        // Mapea campos al modelo User (observa que tu User.fromJson espera phoneNumber/cc también)
         final user = User.fromJson(map);
-        // Sincroniza nombres de clave si tu backend usa 'cc' en lugar de 'nit' (ya lo manejas en User.fromJson)
-        setCurrentUser(user);
+        _currentUser = user;
+        notifyListeners();
         return user;
       }
-
-      debugPrint("fetchUserByPhone ${resp.statusCode}: ${resp.body}");
-      return null;
     } catch (e) {
-      debugPrint("Error fetchUserByPhone: $e");
-      return null;
-    }
-  }
-
-  Future<User?> fetchUserById(String userId) async {
-    final response =
-        await http.get(Uri.parse("${ApiConfig.baseUrl}/users/id/$userId"));
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      return User.fromJson(data);
-    } else {
-      debugPrint("Error fetching user: ${response.statusCode}");
-      return null;
-    }
-  }
-
-  User? _parseUserFromBody(String body) {
-    final decoded = jsonDecode(body);
-
-    if (decoded is Map<String, dynamic>) {
-      // Si viene envuelto en 'data', úsalo; si no, usa el propio mapa
-      final Map<String, dynamic>? raw =
-          decoded['data'] is Map<String, dynamic> ? decoded['data'] : decoded;
-      if (raw != null) {
-        return User.fromJson(raw);
-      }
+      debugPrint("fetchUserByPhone error: $e");
     }
     return null;
   }
 
+  Future<User?> fetchUserById(String userId) async {
+    try {
+      final resp =
+          await http.get(Uri.parse("${ApiConfig.baseUrl}/users/id/$userId"));
+
+      if (resp.statusCode == 200) {
+        final raw = jsonDecode(resp.body);
+        return User.fromJson(raw is Map<String, dynamic> ? raw : raw["data"]);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ========================= VENTAS DEL DÍA =========================
   Future<void> fetchTodaysSales() async {
     try {
-      final response = await http.get(Uri.parse(_baseUrl));
-      if (response.statusCode != 200) {
-        throw Exception("Error al obtener ventas: ${response.statusCode}");
-      }
+      final resp = await http.get(Uri.parse(_baseUrl));
+      if (resp.statusCode != 200) return;
 
-      final jsonResponse = jsonDecode(response.body);
-      final List<dynamic> data = jsonResponse['data'];
+      final json = jsonDecode(resp.body);
+      final List<dynamic> data = json["data"];
+
       final today = DateTime.now();
+      final List<Invoice> parsed = [];
 
-      final List<Invoice> loadedSales = [];
+      for (final factura in data) {
+        final invoice = Invoice.fromJson(factura);
 
-      for (final facturaJson in data) {
-        final invoice = Invoice.fromJson(facturaJson);
-
-        final isToday = invoice.createdAt.year == today.year &&
+        final sameDay = invoice.createdAt.year == today.year &&
             invoice.createdAt.month == today.month &&
             invoice.createdAt.day == today.day;
 
-        if (!isToday) continue;
+        if (!sameDay) continue;
 
-        // Si ya viene con user completo:
         if (invoice.user != null) {
-          loadedSales.add(invoice);
+          parsed.add(invoice);
           continue;
         }
 
-        // Si viene con userId, intentamos enriquecerlo
         if (invoice.userId != null && invoice.userId!.isNotEmpty) {
-          try {
-            final userResp = await http.get(
-              Uri.parse("${ApiConfig.baseUrl}/users/id/${invoice.userId}"),
-            );
+          final respUser = await http.get(
+            Uri.parse("${ApiConfig.baseUrl}/users/id/${invoice.userId}"),
+          );
 
-            if (userResp.statusCode == 200) {
-              final user = _parseUserFromBody(userResp.body);
-              if (user != null) {
-                loadedSales.add(invoice.copyWith(user: user));
-              } else {
-                // No hay 'data' pero tampoco objeto válido => agregamos como llegó
-                loadedSales.add(invoice);
-              }
-            } else {
-              loadedSales.add(invoice);
-            }
-          } catch (_) {
-            loadedSales.add(invoice);
+          if (respUser.statusCode == 200) {
+            final raw = jsonDecode(respUser.body);
+            final user = User.fromJson(raw is Map ? raw : raw["data"]);
+            parsed.add(invoice.copyWith(user: user));
+            continue;
           }
-        } else {
-          loadedSales.add(invoice);
         }
+
+        parsed.add(invoice);
       }
 
-      _todaysSales = loadedSales;
+      _todaysSales = parsed;
       notifyListeners();
     } catch (e) {
-      throw Exception("Error en fetchTodaysSales: $e");
+      debugPrint("fetchTodaysSales error: $e");
     }
   }
 
-  /// Genera el PDF usando la factura local (sin hacer petición al servidor).
-  /// Ideal para COTIZACIONES o pruebas offline.
+  // ========================= FACTURA LOCAL (UI antigua) =========================
+  Invoice buildLocalInvoice(ProductProvider productProvider) {
+    final selected = productProvider.selectedProducts.map((product) {
+      final qty = productProvider.quantities[product] ?? 1;
+      final applied = productProvider.modifiedPrices[product] ?? product.price;
+
+      return Product(
+        id: product.id,
+        name: product.name,
+        price: applied,
+        description: product.description,
+        stock: product.stock,
+        category: product.category,
+        images: List<String>.from(product.images),
+        cachedImageBytes: product.cachedImageBytes,
+        quantity: qty,
+      );
+    }).toList();
+
+    final total = selected.fold<double>(
+      0.0,
+      (sum, p) => sum + (p.price * (p.quantity ?? 1)),
+    );
+
+    return Invoice(
+      id: "local",
+      user: _currentUser,
+      products: selected,
+      totalAmount: total,
+      medioPago: _medioPago,
+      pagaCon: _pagaCon,
+      cambio: _cambio,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
 
   Future<void> generatePdfLocal(BuildContext context,
       {String docType = 'COTIZACIÓN'}) async {
     final productProvider =
         Provider.of<ProductProvider>(context, listen: false);
 
-    // Verifica que haya productos seleccionados
     if (productProvider.selectedProducts.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("No hay productos seleccionados."),
-          backgroundColor: Colors.red,
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
       return;
     }
 
-    // Construye la factura local
-    final Invoice localInvoice = buildLocalInvoice(productProvider);
-
-    // Genera el PDF directamente con los datos locales
-    final pdfService = PDFService();
-    await pdfService.printInvoiceStyled(localInvoice, docType: docType);
-
-    // Si quieres limpiar la selección de productos tras generar el PDF, descomenta:
-    // productProvider.removeSelectedProducts();
+    final invoice = buildLocalInvoice(productProvider);
+    await PDFService().printInvoiceStyled(invoice, docType: docType);
   }
 
+  // ========================= FACTURA DESDE UI ANTIGUA =========================
   Future<void> createInvoice(BuildContext context,
       {String docType = 'FACTURA DE COMPRA'}) async {
     final productProvider =
         Provider.of<ProductProvider>(context, listen: false);
 
     if (productProvider.selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
+      return;
+    }
+
+    Invoice invoice = buildLocalInvoice(productProvider);
+    final consecutive = await _invoiceService.fetchNextConsecutive();
+
+    final payload = {
+      "name": invoice.user?.name ?? "",
+      "phone": invoice.user?.phone ?? "",
+      "email": invoice.user?.email ?? "",
+      "cc": invoice.user?.nit ?? "",
+      "products": invoice.products
+          .map((p) => {
+                "productId": p.id,
+                "quantity": p.quantity,
+                "appliedPrice": p.price
+              })
+          .toList(),
+      "medioPago": invoice.medioPago,
+      "pagaCon": invoice.pagaCon,
+      "cambio": invoice.cambio,
+      "totalAmount": invoice.totalAmount,
+      "consecutivo": consecutive
+    };
+
+    try {
+      final resp = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        await PDFService().printInvoiceStyled(invoice, docType: docType);
+        productProvider.removeSelectedProducts();
+      }
+    } catch (e) {
+      debugPrint("Error createInvoice: $e");
+    }
+  }
+
+  // ========================= FACTURA DESDE CARRITO =========================
+  Future<void> createInvoiceFromCart(BuildContext context,
+      {String docType = 'FACTURA DE COMPRA'}) async {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final cart = cartProvider.cart;
+
+    final selectedItems = resolveSelectedItemsFromCart(cart);
+
+    if (selectedItems.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("No hay productos seleccionados para facturar."),
-          backgroundColor: Colors.red,
-        ),
+        const SnackBar(content: Text("No has seleccionado productos.")),
       );
       return;
     }
 
-    // 1) Construimos el invoice local con todos los datos
-    Invoice localInvoice = buildLocalInvoice(productProvider);
+    final int consecutivo = await _invoiceService.fetchNextConsecutive();
 
-    // 2) Obtenemos el consecutivo desde el servidor
-    final int nextConsec = await _invoiceService.fetchNextConsecutive();
+    final payloadProducts = selectedItems.map((item) {
+      final num priceNum =
+          item.appliedPrice > 0 ? item.appliedPrice : item.product.price;
+      final double applied = priceNum.toDouble();
 
-    // 3) Creamos un nuevo Invoice basado en el local, pero fijando el consecutivo
-    localInvoice = Invoice(
-      id: localInvoice.id,
-      user: localInvoice.user,
-      userId: localInvoice.userId,
-      products: localInvoice.products,
-      totalAmount: localInvoice.totalAmount,
-      medioPago: localInvoice.medioPago,
-      pagaCon: localInvoice.pagaCon,
-      cambio: localInvoice.cambio,
-      consecutivo: nextConsec,
-      createdAt: localInvoice.createdAt,
-      updatedAt: localInvoice.updatedAt,
-    );
+      return {
+        "productId": item.product.id,
+        "quantity": item.quantity,
+        "appliedPrice": applied,
+      };
+    }).toList();
 
-    // 4) Armamos el payload para el servidor (incluyendo el consecutivo)
-    final invoiceData = {
-      "name": localInvoice.user?.name ?? "Cliente",
-      "phone": localInvoice.user?.phone ?? "No proporcionado",
-      "email": localInvoice.user?.email ?? "No proporcionado",
-      "cc": localInvoice.user?.nit ?? "No proporcionado",
-      "detalles": "Factura generada desde Flutter",
-      "products": localInvoice.products
-          .map((p) => {
-                "productId": p.id,
-                "quantity": p.quantity,
-                "appliedPrice": p.price,
-              })
-          .toList(),
-      "pagaCon": localInvoice.pagaCon,
-      "medioPago": localInvoice.medioPago,
-      "cambio": localInvoice.cambio,
-      "totalAmount": localInvoice.totalAmount,
-      "consecutivo": localInvoice.consecutivo,
+    final double totalAmount = _subtotal > 0
+        ? _subtotal
+        : payloadProducts.fold<double>(
+            0.0,
+            (sum, p) =>
+                sum +
+                (p["quantity"] as num).toDouble() *
+                    (p["appliedPrice"] as num).toDouble(),
+          );
+
+    final payload = {
+      "name": _currentUser?.name ?? "Cliente",
+      "phone": _currentUser?.phone ?? "",
+      "email": _currentUser?.email ?? "",
+      "cc": _currentUser?.nit ?? "",
+      "products": payloadProducts,
+      "medioPago": _medioPago,
+      "pagaCon": _pagaCon,
+      "cambio": _cambio,
+      "totalAmount": totalAmount,
+      "consecutivo": consecutivo
     };
 
     try {
-      final response = await http.post(
+      final resp = await http.post(
         Uri.parse(_baseUrl),
         headers: {"Content-Type": "application/json"},
-        body: jsonEncode(invoiceData),
+        body: jsonEncode(payload),
       );
 
-      if (response.statusCode >= 200 && response.statusCode < 300) {
-        final body = jsonDecode(response.body);
-        final invoiceServer = Invoice.fromJson(body['data']);
-        _invoices.add(invoiceServer);
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        final products = selectedItems.map((item) {
+          final num priceNum =
+              item.appliedPrice > 0 ? item.appliedPrice : item.product.price;
+          final double applied = priceNum.toDouble();
+
+          return Product(
+            id: item.product.id,
+            name: item.product.name,
+            price: applied,
+            description: item.product.description,
+            stock: item.product.stock,
+            category: item.product.category,
+            images: List<String>.from(item.product.images),
+            cachedImageBytes: item.product.cachedImageBytes,
+            quantity: item.quantity,
+          );
+        }).toList();
+
+        final invoice = Invoice(
+          id: "inv-$consecutivo",
+          user: _currentUser,
+          products: products,
+          totalAmount: totalAmount,
+          medioPago: _medioPago,
+          pagaCon: _pagaCon,
+          cambio: _cambio,
+          consecutivo: consecutivo,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await PDFService().printInvoiceStyled(invoice, docType: docType);
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              body['message'] ??
-                  "Factura #${localInvoice.consecutivo} creada exitosamente",
-            ),
-            backgroundColor: Colors.green,
-          ),
+          SnackBar(content: Text("Factura #$consecutivo creada correctamente")),
         );
 
-        // refrescar stock, etc.
-        await productProvider.fetchProducts(forceUpdate: true);
-        // 5) Generar PDF usando nuestro localInvoice (con todos los datos)
-        await PDFService().printInvoiceStyled(
-          localInvoice,
-          docType: docType,
-        );
-
-        productProvider.removeSelectedProducts();
-      } else {
-        final err = jsonDecode(response.body);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Error al crear la factura: ${err['message']}"),
-            backgroundColor: Colors.red,
-          ),
-        );
+        clearSelections();
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("Error al conectar con el servidor: $e"),
-          backgroundColor: Colors.red,
-        ),
-      );
+      debugPrint("Error factura carrito: $e");
     }
   }
 
-  // ================== LIMPIAR DATOS ==================
-  /// Limpia todos los datos de la factura
+  // ========================= PDF DESDE CARRITO =========================
+  Future<void> generatePdfFromCart(
+    BuildContext context, {
+    String docType = 'COTIZACIÓN',
+  }) async {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final cart = cartProvider.cart;
+
+    final selectedItems = resolveSelectedItemsFromCart(cart);
+
+    if (selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
+      return;
+    }
+
+    final products = selectedItems.map((item) {
+      final num priceNum =
+          item.appliedPrice > 0 ? item.appliedPrice : item.product.price;
+      final double applied = priceNum.toDouble();
+
+      return Product(
+        id: item.product.id,
+        name: item.product.name,
+        price: applied,
+        description: item.product.description,
+        stock: item.product.stock,
+        category: item.product.category,
+        images: List<String>.from(item.product.images),
+        cachedImageBytes: item.product.cachedImageBytes,
+        quantity: item.quantity,
+      );
+    }).toList();
+
+    final total = products.fold<double>(
+      0.0,
+      (sum, p) => sum + (p.price * (p.quantity ?? 1)),
+    );
+
+    final invoice = Invoice(
+      id: "local-cart-pdf",
+      user: _currentUser,
+      products: products,
+      totalAmount: total,
+      medioPago: _medioPago,
+      pagaCon: _pagaCon,
+      cambio: _cambio,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    await PDFService().printInvoiceStyled(invoice, docType: docType);
+  }
+
+  // ========================= LIMPIEZA =========================
+  void clearSelections() {
+    _selectedProductIds.clear();
+    clearAllData();
+  }
+
   void clearAllData() {
     _currentUser = null;
     _medioPago = 'Efectivo';
     _pagaCon = 0.0;
+    _subtotal = 0.0;
+    _cambio = 0.0;
+    notifyListeners();
+  }
+}
+*/
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+
+import '../config/api_config.dart';
+import '../models/cart_model.dart';
+import '../models/invoice_model.dart';
+import '../models/product_model.dart';
+import '../models/user_model.dart';
+import '../providers/auth_provider.dart';
+import '../providers/cart_provider.dart';
+import '../providers/product_provider.dart';
+import '../services/invoice_service.dart';
+import '../services/pdfService.dart';
+
+class InvoiceProvider with ChangeNotifier {
+  final String _baseUrl = "${ApiConfig.baseUrl}/newBill";
+  final InvoiceService _invoiceService = InvoiceService();
+
+  // ========================= CAMPOS =========================
+  User? _currentUser;
+
+  String _medioPago = 'Efectivo';
+  double _pagaCon = 0.0;
+  double _cambio = 0.0;
+
+  /// IDs de productos seleccionados en el carrito
+  Set<String> _selectedProductIds = {};
+
+  final List<Invoice> _invoices = [];
+  List<Invoice> _todaysSales = [];
+
+  double _subtotal = 0.0;
+
+  // ========================= GETTERS =========================
+  User? get currentUser => _currentUser;
+  String get medioPago => _medioPago;
+  double get pagaCon => _pagaCon;
+  double get cambio => _cambio;
+  List<Invoice> get invoices => _invoices;
+  List<Invoice> get todaysSales => _todaysSales;
+  Set<String> get selectedProductIds => _selectedProductIds;
+  double get subtotal => _subtotal;
+
+  /// Solo para debug (retorna IDs)
+  List<String> get selectedCartItems {
+    return _selectedProductIds.toList();
+  }
+
+  // ========================= TOTALES =========================
+
+  /// Actualiza subtotal y recalcula cambio
+  void updateTotals(double value) {
+    _subtotal = value;
+    _cambio = _pagaCon - _subtotal;
+    notifyListeners();
+  }
+
+  /// Se llama cuando cambias "Paga con" desde el CartSummary
+  void setPagaCon(double value) {
+    _pagaCon = value;
+    _cambio = _pagaCon - _subtotal;
+    notifyListeners();
+  }
+
+  /// Recalcula subtotal y cambio a partir del carrito actual
+  /// usando SOLO los items cuyos IDs estén en _selectedProductIds
+  void recalculateTotalsFromCart(
+    Cart? cart, {
+    required bool isAdmin,
+  }) {
+    if (cart == null) {
+      _subtotal = 0.0;
+      _cambio = _pagaCon - _subtotal;
+      notifyListeners();
+      return;
+    }
+
+    final selectedItems = cart.items
+        .where((item) => _selectedProductIds.contains(item.product.id))
+        .toList();
+
+    final double total = selectedItems.fold<double>(0.0, (sum, item) {
+      final double unitPrice = isAdmin
+          ? (item.appliedPrice > 0
+              ? item.appliedPrice.toDouble()
+              : item.product.price)
+          : item.product.price;
+      return sum + unitPrice * item.quantity;
+    });
+
+    _subtotal = total;
+    _cambio = _pagaCon - _subtotal;
+    notifyListeners();
+  }
+
+  // ========================= SETTERS =========================
+  void setCurrentUser(User user) {
+    _currentUser = user;
+    notifyListeners();
+  }
+
+  void setMedioPago(String medio) {
+    _medioPago = medio;
+    notifyListeners();
+  }
+
+  /// Actualizar selección de productos del carrito (vía ProductList)
+  void setSelectedCartItems(List<CartItem> items) {
+    _selectedProductIds = items.map((e) => e.product.id).toSet();
+    notifyListeners();
+  }
+
+  // ============= COMPATIBILIDAD CON UI ANTIGUA (no borrar) =============
+  void updateSubtotal(ProductProvider productProvider) {
+    // En la UI nueva no se usa, se mantiene por compatibilidad
+    notifyListeners();
+  }
+
+  // ========================= USUARIOS =========================
+  Future<User?> fetchUserByPhone(String phone) async {
+    try {
+      final sanitized = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      final url = Uri.parse("${ApiConfig.baseUrl}/users/phone/$sanitized");
+      final resp = await http.get(url);
+
+      if (resp.statusCode == 200) {
+        final raw = jsonDecode(resp.body);
+
+        final Map<String, dynamic>? map =
+            (raw is Map<String, dynamic> && raw['data'] is Map<String, dynamic>)
+                ? raw['data']
+                : (raw is Map<String, dynamic> ? raw : null);
+
+        if (map == null) return null;
+
+        final user = User.fromJson(map);
+        _currentUser = user;
+        notifyListeners();
+        return user;
+      }
+    } catch (e) {
+      debugPrint("fetchUserByPhone error: $e");
+    }
+    return null;
+  }
+
+  Future<User?> fetchUserById(String userId) async {
+    try {
+      final resp =
+          await http.get(Uri.parse("${ApiConfig.baseUrl}/users/id/$userId"));
+
+      if (resp.statusCode == 200) {
+        final raw = jsonDecode(resp.body);
+        return User.fromJson(raw is Map<String, dynamic> ? raw : raw["data"]);
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // ========================= VENTAS DEL DÍA =========================
+  Future<void> fetchTodaysSales() async {
+    try {
+      final resp = await http.get(Uri.parse(_baseUrl));
+      if (resp.statusCode != 200) return;
+
+      final json = jsonDecode(resp.body);
+      final List<dynamic> data = json["data"];
+
+      final today = DateTime.now();
+      final List<Invoice> parsed = [];
+
+      for (final factura in data) {
+        final invoice = Invoice.fromJson(factura);
+
+        final sameDay = invoice.createdAt.year == today.year &&
+            invoice.createdAt.month == today.month &&
+            invoice.createdAt.day == today.day;
+
+        if (!sameDay) continue;
+
+        if (invoice.user != null) {
+          parsed.add(invoice);
+          continue;
+        }
+
+        if (invoice.userId != null && invoice.userId!.isNotEmpty) {
+          final respUser = await http.get(
+            Uri.parse("${ApiConfig.baseUrl}/users/id/${invoice.userId}"),
+          );
+
+          if (respUser.statusCode == 200) {
+            final raw = jsonDecode(respUser.body);
+            final user = User.fromJson(raw is Map ? raw : raw["data"]);
+            parsed.add(invoice.copyWith(user: user));
+            continue;
+          }
+        }
+
+        parsed.add(invoice);
+      }
+
+      _todaysSales = parsed;
+      notifyListeners();
+    } catch (e) {
+      debugPrint("fetchTodaysSales error: $e");
+    }
+  }
+
+  // ========================= FACTURA LOCAL (UI antigua) =========================
+  Invoice buildLocalInvoice(ProductProvider productProvider) {
+    final selected = productProvider.selectedProducts.map((product) {
+      final qty = productProvider.quantities[product] ?? 1;
+      final applied = productProvider.modifiedPrices[product] ?? product.price;
+
+      return Product(
+        id: product.id,
+        name: product.name,
+        price: applied,
+        description: product.description,
+        stock: product.stock,
+        category: product.category,
+        images: List<String>.from(product.images),
+        cachedImageBytes: product.cachedImageBytes,
+        quantity: qty,
+      );
+    }).toList();
+
+    return Invoice(
+      id: "local",
+      user: _currentUser,
+      products: selected,
+      totalAmount:
+          selected.fold(0.0, (sum, p) => sum + (p.price * (p.quantity ?? 1))),
+      medioPago: _medioPago,
+      pagaCon: _pagaCon,
+      cambio: _cambio,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Future<void> generatePdfLocal(BuildContext context,
+      {String docType = 'COTIZACIÓN'}) async {
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
+
+    if (productProvider.selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
+      return;
+    }
+
+    final invoice = buildLocalInvoice(productProvider);
+    await PDFService().printInvoiceStyled(invoice, docType: docType);
+  }
+
+  // ========================= FACTURA DESDE UI ANTIGUA =========================
+  Future<void> createInvoice(BuildContext context,
+      {String docType = 'FACTURA DE COMPRA'}) async {
+    final productProvider =
+        Provider.of<ProductProvider>(context, listen: false);
+
+    if (productProvider.selectedProducts.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
+      return;
+    }
+
+    Invoice invoice = buildLocalInvoice(productProvider);
+    final consecutive = await _invoiceService.fetchNextConsecutive();
+
+    final payload = {
+      "name": invoice.user?.name ?? "",
+      "phone": invoice.user?.phone ?? "",
+      "email": invoice.user?.email ?? "",
+      "cc": invoice.user?.nit ?? "",
+      "products": invoice.products
+          .map((p) => {
+                "productId": p.id,
+                "quantity": p.quantity,
+                "appliedPrice": p.price
+              })
+          .toList(),
+      "medioPago": invoice.medioPago,
+      "pagaCon": invoice.pagaCon,
+      "cambio": invoice.cambio,
+      "totalAmount": invoice.totalAmount,
+      "consecutivo": consecutive
+    };
+
+    try {
+      final resp = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        await PDFService().printInvoiceStyled(invoice, docType: docType);
+        productProvider.removeSelectedProducts();
+      }
+    } catch (e) {
+      debugPrint("Error createInvoice: $e");
+    }
+  }
+
+  // ========================= FACTURA DESDE CARRITO =========================
+  Future<void> createInvoiceFromCart(BuildContext context,
+      {String docType = 'FACTURA DE COMPRA'}) async {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final bool isAdmin = authProvider.role == 'admin';
+
+    final cart = cartProvider.cart;
+    final selectedItems = resolveSelectedItemsFromCart(cart);
+
+    if (selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("No has seleccionado productos.")),
+      );
+      return;
+    }
+
+    final int consecutivo = await _invoiceService.fetchNextConsecutive();
+
+    final payloadProducts = selectedItems.map((item) {
+      final double unitPrice = isAdmin
+          ? (item.appliedPrice > 0
+              ? item.appliedPrice.toDouble()
+              : item.product.price)
+          : item.product.price;
+
+      return {
+        "productId": item.product.id,
+        "quantity": item.quantity,
+        "appliedPrice": unitPrice,
+      };
+    }).toList();
+
+    final double totalAmount = payloadProducts.fold<double>(
+      0,
+      (sum, p) =>
+          sum +
+          (p["quantity"] as num).toDouble() *
+              (p["appliedPrice"] as num).toDouble(),
+    );
+
+    final payload = {
+      "name": _currentUser?.name ?? "Cliente",
+      "phone": _currentUser?.phone ?? "",
+      "email": _currentUser?.email ?? "",
+      "cc": _currentUser?.nit ?? "",
+      "products": payloadProducts,
+      "medioPago": _medioPago,
+      "pagaCon": _pagaCon,
+      "cambio": _cambio,
+      "totalAmount": totalAmount,
+      "consecutivo": consecutivo
+    };
+
+    try {
+      final resp = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode(payload),
+      );
+
+      if (resp.statusCode >= 200 && resp.statusCode < 300) {
+        final productsForInvoice = selectedItems.map((item) {
+          final double unitPrice = isAdmin
+              ? (item.appliedPrice > 0
+                  ? item.appliedPrice.toDouble()
+                  : item.product.price)
+              : item.product.price;
+
+          return Product(
+            id: item.product.id,
+            name: item.product.name,
+            price: unitPrice,
+            description: item.product.description,
+            stock: item.product.stock,
+            category: item.product.category,
+            images: List<String>.from(item.product.images),
+            cachedImageBytes: item.product.cachedImageBytes,
+            quantity: item.quantity,
+          );
+        }).toList();
+
+        final invoice = Invoice(
+          id: "inv-$consecutivo",
+          user: _currentUser,
+          products: productsForInvoice,
+          totalAmount: totalAmount,
+          medioPago: _medioPago,
+          pagaCon: _pagaCon,
+          cambio: _cambio,
+          consecutivo: consecutivo,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        );
+
+        await PDFService().printInvoiceStyled(invoice, docType: docType);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Factura #$consecutivo creada correctamente")),
+        );
+
+        clearSelections();
+      }
+    } catch (e) {
+      debugPrint("Error factura carrito: $e");
+    }
+  }
+
+  // ========================= PDF DESDE CARRITO =========================
+  Future<void> generatePdfFromCart(
+    BuildContext context, {
+    String docType = 'COTIZACIÓN',
+  }) async {
+    final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final bool isAdmin = authProvider.role == 'admin';
+
+    final cart = cartProvider.cart;
+    final selectedItems = resolveSelectedItemsFromCart(cart);
+
+    if (selectedItems.isEmpty) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("No hay productos.")));
+      return;
+    }
+
+    final products = selectedItems.map((item) {
+      final double unitPrice = isAdmin
+          ? (item.appliedPrice > 0
+              ? item.appliedPrice.toDouble()
+              : item.product.price)
+          : item.product.price;
+
+      return Product(
+        id: item.product.id,
+        name: item.product.name,
+        price: unitPrice,
+        description: item.product.description,
+        stock: item.product.stock,
+        category: item.product.category,
+        images: List<String>.from(item.product.images),
+        cachedImageBytes: item.product.cachedImageBytes,
+        quantity: item.quantity,
+      );
+    }).toList();
+
+    final invoice = Invoice(
+      id: "local-cart-pdf",
+      user: _currentUser,
+      products: products,
+      totalAmount:
+          products.fold(0.0, (sum, p) => sum + (p.price * (p.quantity ?? 1))),
+      medioPago: _medioPago,
+      pagaCon: _pagaCon,
+      cambio: _cambio,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    await PDFService().printInvoiceStyled(invoice, docType: docType);
+  }
+
+  // ========================= SELECCIÓN DESDE CARRITO =========================
+
+  /// Resolver la lista de CartItem seleccionados a partir del carrito actual
+  List<CartItem> resolveSelectedItemsFromCart(Cart? cart) {
+    if (cart == null) return [];
+    if (_selectedProductIds.isEmpty) return [];
+    return cart.items
+        .where((item) => _selectedProductIds.contains(item.product.id))
+        .toList();
+  }
+
+  // ========================= LIMPIEZA =========================
+  void clearSelections() {
+    _selectedProductIds.clear();
+    clearAllData();
+  }
+
+  void clearAllData() {
+    _currentUser = null;
+    _medioPago = 'Efectivo';
+    _pagaCon = 0.0;
+    _subtotal = 0.0;
     _cambio = 0.0;
     notifyListeners();
   }

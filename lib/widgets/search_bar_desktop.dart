@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:ud_store_flutter_app/main.dart';
 import 'package:ud_store_flutter_app/screens/product_detail_screen.dart';
 
+import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import '../widgets/user_dropdown_menu.dart';
 
@@ -293,6 +294,10 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
   Widget _navItem(
       BuildContext context, String route, IconData icon, String label,
       {bool showBadge = false}) {
+    final cartProvider = Provider.of<CartProvider>(context);
+
+    final itemCount = cartProvider.cart?.items.length ?? 0;
+
     return Row(
       children: [
         GestureDetector(
@@ -304,9 +309,13 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
                 height: 45,
                 width: 45,
                 decoration: const BoxDecoration(
-                    color: Colors.blue, shape: BoxShape.circle),
+                  color: Colors.blue,
+                  shape: BoxShape.circle,
+                ),
                 child: Icon(icon, color: Colors.white, size: 30),
               ),
+
+              // 🔥 SIEMPRE mostrar badge cuando showBadge == true
               if (showBadge)
                 Positioned(
                   right: 4,
@@ -314,13 +323,21 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
                   child: Container(
                     padding: const EdgeInsets.all(2),
                     decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(10)),
-                    constraints:
-                        const BoxConstraints(minWidth: 16, minHeight: 16),
-                    child: const Text(
-                      '0',
-                      style: TextStyle(color: Colors.white, fontSize: 12),
+                      color: itemCount > 0
+                          ? Colors.red
+                          : Colors.red, // rojo o gris
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    constraints: const BoxConstraints(
+                      minWidth: 16,
+                      minHeight: 16,
+                    ),
+                    child: Text(
+                      itemCount.toString(), // ← muestra 0 si está vacío
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   ),
