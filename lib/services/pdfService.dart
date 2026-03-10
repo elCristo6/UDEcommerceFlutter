@@ -68,6 +68,7 @@ class PDFService {
     try {
       // Logo
       final logoData = await rootBundle.load('assets/LogoPDF.png');
+
       final logoBytes = logoData.buffer.asUint8List();
       final logoBitmap = PdfBitmap(logoBytes);
 
@@ -83,8 +84,8 @@ class PDFService {
       final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 10,
           style: PdfFontStyle.bold);
       final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 10);
-      final tableHeaderColor = PdfColor(350, 270, 255);
-
+      final tableHeaderColor = PdfColor(230, 230, 230);
+      await preloadInvoiceImages(invoice);
       double top = 10;
 
       // Logo
@@ -167,11 +168,15 @@ Medio de pago: ${invoice.medioPago}
         }
 
         // 3) pintar imagen / placeholder
-        if (bytes != null) {
-          final bmp = PdfBitmap(bytes);
-          row.cells[0].value = '';
-          row.cells[0].style.backgroundImage = bmp;
-        } else {
+        try {
+          if (bytes != null) {
+            final bmp = PdfBitmap(bytes);
+            row.cells[0].value = '';
+            row.cells[0].style.backgroundImage = bmp;
+          } else {
+            row.cells[0].value = '[img]';
+          }
+        } catch (_) {
           row.cells[0].value = '[img]';
         }
 
@@ -179,8 +184,8 @@ Medio de pago: ${invoice.medioPago}
         row.height = 56; // alto de la fila con imagen
         // …
 
-        final price = product.price;
-        final qty = product.quantity;
+        final price = (product.price.isNaN ? 0.0 : product.price);
+        final qty = (product.quantity <= 0 ? 1 : product.quantity);
         final subtotal = (price * qty).round();
         row.cells[1].value = product.name;
         row.cells[2].value = '$qty';
@@ -196,13 +201,20 @@ Medio de pago: ${invoice.medioPago}
         cellPadding: PdfPaddings(left: 5, right: 5, top: 2, bottom: 2),
       );
 
+      final format = PdfLayoutFormat(layoutType: PdfLayoutType.paginate);
+
       final result = grid.draw(
         page: page,
         bounds:
             Rect.fromLTWH(20, top, pageSize.width - 40, pageSize.height - top),
-      )!;
-      top = result.bounds.bottom + 20;
+        format: format,
+      );
+      if (result == null) {
+        throw Exception(
+            'PdfGrid.draw devolvió null (posible overflow o layout).');
+      }
 
+      top = result.bounds.bottom + 20;
       // Totales
       graphics.drawString(
         'Pago con: \$${_formatCurrency(invoice.pagaCon.round())}',
@@ -238,9 +250,13 @@ Medio de pago: ${invoice.medioPago}
       Future.delayed(const Duration(seconds: 30), () {
         html.Url.revokeObjectUrl(urlOut);
       });
-    } catch (e) {
-      // No rompas el flujo; si falla una imagen, igual se genera el PDF.
-      // print('Error generando el PDF: $e');
+    } catch (e, st) {
+      // En web, esto te salva la vida para saber QUÉ producto revienta
+      // ignore: avoid_print
+      print('❌ Error generando PDF: $e');
+      // ignore: avoid_print
+      print(st);
+      rethrow; // para que tu UI muestre SnackBar de error (tu botón ya lo hace)
     }
   }
 }

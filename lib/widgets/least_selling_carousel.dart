@@ -32,15 +32,15 @@ class LeastSellingCarousel extends StatelessWidget {
               ),
             ),
             SizedBox(
-              height: 260,
+              height: 360, // más alto para tu diseño (botón + qty + stock)
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 itemCount: products.length,
-                separatorBuilder: (context, _) => const SizedBox(width: 10),
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   return SizedBox(
-                    width: 160,
+                    width: 240, // ancho que se ve PRO en carrusel
                     child: ProductCard(product: products[index]),
                   );
                 },

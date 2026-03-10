@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ud_store_flutter_app/main.dart';
-import 'package:ud_store_flutter_app/screens/product_detail_screen.dart';
 
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
@@ -33,6 +32,8 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
   final FocusNode _focusNode = FocusNode();
   final GlobalKey _textFieldKey = GlobalKey();
   OverlayEntry? _overlayEntry;
+  bool _hoveringOverlay = false;
+  /*
   void _showOverlay() {
     final renderBox =
         _textFieldKey.currentContext!.findRenderObject() as RenderBox;
@@ -69,13 +70,17 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
                     final product = products[index];
                     return InkWell(
                       onTap: () {
+                        final p = product;
+
+                        // 1) Cierra overlay y teclado/foco
                         _removeOverlay();
-                        Future.delayed(Duration(milliseconds: 100), () {
-                          navigatorKey.currentState!.push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ProductDetailScreen(product: product),
-                            ),
+                        _focusNode.unfocus();
+
+                        // 2) Navega usando el router centralizado (más estable)
+                        Future.microtask(() {
+                          navigatorKey.currentState?.pushNamed(
+                            '/productDetail',
+                            arguments: p,
                           );
                         });
                       },
@@ -132,6 +137,156 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
     );
     Overlay.of(context).insert(_overlayEntry!);
   }
+*/
+  void _showOverlay() {
+    final renderBox =
+        _textFieldKey.currentContext!.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    final offset = renderBox.localToGlobal(Offset.zero);
+
+    int hoverIndex = -1; // ✅ estado local del overlay
+
+    _overlayEntry = OverlayEntry(
+      builder: (_) => Positioned(
+        left: offset.dx,
+        top: offset.dy + size.height,
+        width: size.width,
+        child: MouseRegion(
+            onEnter: (_) => _hoveringOverlay = true,
+            onExit: (_) => _hoveringOverlay = false,
+            child: Material(
+              elevation: 10,
+              borderRadius: BorderRadius.circular(14),
+              child: StatefulBuilder(
+                builder: (context, setOverlayState) {
+                  return Container(
+                    constraints: const BoxConstraints(maxHeight: 320),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Consumer<ProductProvider>(
+                      builder: (context, provider, _) {
+                        final products = provider.filteredProducts;
+
+                        if (products.isEmpty) {
+                          return const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Text('No se encontraron productos.'),
+                          );
+                        }
+
+                        return ListView.builder(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final product = products[index];
+                            final isHover = hoverIndex == index;
+
+                            return MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              onEnter: (_) =>
+                                  setOverlayState(() => hoverIndex = index),
+                              onExit: (_) =>
+                                  setOverlayState(() => hoverIndex = -1),
+                              child: InkWell(
+                                onTap: () {
+                                  final p = product;
+                                  _removeOverlay();
+                                  _focusNode.unfocus();
+
+                                  WidgetsBinding.instance
+                                      .addPostFrameCallback((_) {
+                                    navigatorKey.currentState?.pushNamed(
+                                      '/productDetail',
+                                      arguments: p,
+                                    );
+                                  });
+                                },
+                                borderRadius: BorderRadius.circular(12),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 140),
+                                  curve: Curves.easeOut,
+                                  padding: const EdgeInsets.all(12),
+                                  margin: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: isHover
+                                        ? const Color(0xFFF2F7FF)
+                                        : Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: isHover
+                                          ? Colors.blue
+                                          : Colors.transparent,
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: isHover
+                                        ? [
+                                            BoxShadow(
+                                              color: Colors.black
+                                                  .withOpacity(0.10),
+                                              blurRadius: 16,
+                                              offset: const Offset(0, 10),
+                                            )
+                                          ]
+                                        : [],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: product.images.isNotEmpty
+                                            ? Image.network(
+                                                Uri.encodeFull(
+                                                    product.images.first),
+                                                width: 56,
+                                                height: 56,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Container(
+                                                width: 56,
+                                                height: 56,
+                                                color: Colors.grey[300],
+                                                child: const Icon(Icons.image,
+                                                    size: 28),
+                                              ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Text(
+                                          product.name,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: isHover
+                                                ? FontWeight.w800
+                                                : FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isHover)
+                                        const Icon(Icons.arrow_forward_ios,
+                                            size: 16, color: Colors.blue),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+            )),
+      ),
+    );
+
+    Overlay.of(context).insert(_overlayEntry!);
+  }
 
   void _removeOverlay() {
     _overlayEntry?.remove();
@@ -141,12 +296,20 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
   @override
   void initState() {
     super.initState();
+
     _focusNode.addListener(() {
       if (_focusNode.hasFocus) {
         _showOverlay();
-      } else {
-        _removeOverlay();
+        return;
       }
+
+      // 👇 Espera un instante: si el click fue sobre el overlay,
+      // no lo cierres antes de que se dispare el onTap del InkWell.
+      Future.delayed(const Duration(milliseconds: 80), () {
+        if (!mounted) return;
+        if (_hoveringOverlay) return; // ✅ el mouse está en overlay, no cierres
+        _removeOverlay();
+      });
     });
   }
 
@@ -172,7 +335,7 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
                   ),
                   alignment: Alignment.center,
                   child: Image.asset(
-                    'assets/flayers instagram (5).png',
+                    'assets/UDElectronics.com.png',
                     fit: BoxFit.contain,
                   ),
                 ),
@@ -296,8 +459,8 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
       {bool showBadge = false}) {
     final cartProvider = Provider.of<CartProvider>(context);
 
-    final itemCount = cartProvider.cart?.items.length ?? 0;
-
+    //final itemCount = cartProvider.cart?.items.length ?? 0;
+    final itemCount = cartProvider.totalItems;
     return Row(
       children: [
         GestureDetector(

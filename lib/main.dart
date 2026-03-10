@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:provider/provider.dart';
 
 import 'models/product_model.dart';
@@ -14,6 +15,7 @@ import 'screens/product_info_list.dart';
 import 'screens/sales_screen.dart';
 
 void main() {
+  setUrlStrategy(PathUrlStrategy());
   runApp(MyApp());
 }
 
@@ -30,7 +32,9 @@ class MyApp extends StatelessWidget {
             create: (context) => ProductProvider()..fetchProducts()),
         ChangeNotifierProvider(create: (_) => InvoiceProvider()),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(
+          create: (_) => CartProvider()..initGuest(),
+        )
       ],
       child: MaterialApp(
         navigatorKey: navigatorKey,

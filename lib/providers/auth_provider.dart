@@ -42,8 +42,12 @@ class AuthProvider with ChangeNotifier {
         navigatorKey.currentContext!,
         listen: false,
       );
-      await cartProvider.loadCart(_token!);
-
+      if (role == 'admin') {
+        await cartProvider.initGuest(); // fuerza local
+        // IMPORTANTE: NO llamar mergeGuestIntoAuth, NO llamar initAuth
+      } else {
+        await cartProvider.mergeGuestIntoAuth(_token!);
+      }
       _isLoading = false;
       notifyListeners();
       return true;
@@ -98,7 +102,6 @@ class AuthProvider with ChangeNotifier {
         listen: false,
       );
       await cartProvider.loadCart(_token!);
-
       notifyListeners();
     }
   }

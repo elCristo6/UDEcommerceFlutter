@@ -1,109 +1,3 @@
-/*import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-
-import '../providers/product_provider.dart';
-import '../widgets/image_carousel.dart';
-import '../widgets/least_selling_carousel.dart';
-import '../widgets/product_card.dart';
-import '../widgets/search_bar.dart' as custom;
-import '../widgets/top_selling_carousel.dart'; // Importar
-import '../widgets/whatsapp_logo_widget.dart'; // Asegúrate de importar el widget creado
-
-class HomeScreen extends StatelessWidget {
-  // ignore: use_super_parameters
-  const HomeScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      // appBar: const custom.SearchBar(),
-      appBar: custom.SearchBar(
-        onSubmitted: (query) {
-          Provider.of<ProductProvider>(context, listen: false)
-              .filterProducts(query);
-          Navigator.pushNamed(
-            context,
-            '/infoProducts',
-            arguments: query,
-          );
-        },
-      ),
-
-      body: ListView(
-        children: [
-          // Carrusel de imágenes
-
-          SizedBox(
-            height: MediaQuery.of(context).size.height * 0.3,
-            child: ImageCarousel(),
-          ),
-          const SizedBox(
-              height: 10), // Espaciado entre el carrusel y los productos
-          const TopSellingCarousel(),
-
-          const SizedBox(height: 10),
-          const LeastSellingCarousel(),
-          // Productos destacados
-          Consumer<ProductProvider>(
-            builder: (context, productProvider, child) {
-              if (productProvider.isLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
-
-              if (productProvider.products.isEmpty) {
-                return const Center(
-                    child: Text('No hay productos disponibles'));
-              }
-
-              // Limitar productos a mostrar a 24 (4 filas de 6 productos)
-              final visibleProducts =
-                  productProvider.products.take(24).toList();
-
-              return GridView.builder(
-                shrinkWrap:
-                    true, // Permitir que el GridView se ajuste a su contenido
-                physics:
-                    const NeverScrollableScrollPhysics(), // Desactivar el scroll interno
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                itemCount:
-                    visibleProducts.length, // Mostrar solo productos limitados
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent:
-                      180, // Cada tarjeta medirá máximo 180px de ancho
-                  childAspectRatio: 0.75,
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                ),
-                itemBuilder: (context, index) {
-                  final product = visibleProducts[index];
-                  return ProductCard(product: product);
-                },
-              );
-            },
-          ),
-
-          // Espaciado antes del footer
-          const SizedBox(height: 20),
-
-          // Pie de página o footer
-          Container(
-            color: Colors.black,
-            padding: const EdgeInsets.all(16.0),
-            child: const Center(
-              child: Text(
-                '© 2025 UD Electronics. Todos los derechos reservados.',
-                style: TextStyle(fontSize: 14, color: Colors.white),
-              ),
-            ),
-          ),
-        ],
-      ),
-      floatingActionButton: const WhatsAppLogoWidget(),
-    );
-  }
-}
-*/
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -115,52 +9,102 @@ import '../widgets/search_bar.dart' as custom;
 import '../widgets/top_selling_carousel.dart';
 import '../widgets/whatsapp_logo_widget.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  static const int _pageSize = 24;
+
+  final ScrollController _scrollController = ScrollController();
+  int _visibleCount = _pageSize;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _scrollController.addListener(() {
+      final position = _scrollController.position;
+      if (!position.hasPixels || !position.hasContentDimensions) return;
+
+      final threshold = 600.0;
+      final isNearBottom =
+          position.pixels >= (position.maxScrollExtent - threshold);
+
+      if (isNearBottom) {
+        final total = context.read<ProductProvider>().products.length;
+        if (_visibleCount < total) {
+          setState(() {
+            _visibleCount = (_visibleCount + _pageSize).clamp(0, total);
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    await context.read<ProductProvider>().fetchProducts();
+    if (mounted) setState(() => _visibleCount = _pageSize);
+  }
+
+  int _crossAxisCountForWidth(double width) {
+    // Objetivo: 6 por fila en desktop.
+    // En pantallas pequeñas baja para evitar overflow.
+    if (width >= 1200) return 6;
+    if (width >= 992) return 5;
+    if (width >= 820) return 4;
+    if (width >= 600) return 3;
+    return 2;
+  }
+
+  double _bannerHeightForWidth(double w) {
+    // Ajusta estos números a tu gusto.
+    // Objetivo: estilo "banner grande" tipo la referencia.
+    if (w >= 1400) return 460; // desktop grande
+    if (w >= 1200) return 420; // desktop normal
+    if (w >= 992) return 360; // laptop
+    if (w >= 768) return 300; // tablet
+    return 220; // móvil
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: custom.SearchBar(
         onSubmitted: (query) {
-          Provider.of<ProductProvider>(context, listen: false)
-              .filterProducts(query);
-
-          Navigator.pushNamed(
-            context,
-            '/infoProducts',
-            arguments: query,
-          );
+          context.read<ProductProvider>().filterProducts(query);
+          Navigator.pushNamed(context, '/infoProducts', arguments: query);
         },
       ),
       body: RefreshIndicator(
-        onRefresh: () async {
-          await Provider.of<ProductProvider>(context, listen: false)
-              .fetchProducts();
-        },
+        onRefresh: _refresh,
         child: ListView(
+          controller: _scrollController,
           children: [
-            // ---------------------------
-            // Carrusel principal
-            // ---------------------------
-            SizedBox(
-              height: MediaQuery.of(context).size.height * 0.30,
+            AspectRatio(
+              aspectRatio: 2.7, // ancho / alto
               child: const ImageCarousel(),
             ),
-
             const SizedBox(height: 10),
 
             const TopSellingCarousel(),
-
             const SizedBox(height: 10),
 
             const LeastSellingCarousel(),
-
             const SizedBox(height: 10),
 
-            // ---------------------------
+            // =========================
             // GRID DE PRODUCTOS
-            // ---------------------------
+            // =========================
             Consumer<ProductProvider>(
               builder: (context, productProvider, child) {
                 if (productProvider.isLoading) {
@@ -172,7 +116,9 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
 
-                if (productProvider.products.isEmpty) {
+                final products = productProvider.products;
+
+                if (products.isEmpty) {
                   return const Center(
                     child: Padding(
                       padding: EdgeInsets.all(20.0),
@@ -181,23 +127,42 @@ class HomeScreen extends StatelessWidget {
                   );
                 }
 
-                final visibleProducts =
-                    productProvider.products.take(24).toList();
+                final total = products.length;
+                final countToShow = _visibleCount.clamp(0, total);
+                final visibleProducts = products.take(countToShow).toList();
 
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                  itemCount: visibleProducts.length,
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 180,
-                    childAspectRatio: 0.75,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                  ),
-                  itemBuilder: (_, index) {
-                    final product = visibleProducts[index];
-                    return ProductCard(product: product);
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final count = _crossAxisCountForWidth(constraints.maxWidth);
+
+                    const paddingH = 12.0;
+                    const spacing = 12.0;
+
+                    final usableWidth = constraints.maxWidth - (paddingH * 2);
+                    final itemWidth =
+                        (usableWidth - (spacing * (count - 1))) / count;
+
+                    // Tu diseño necesita ser más alto en grids densos (6 por fila).
+                    // Ajusta este ratio: más pequeño => más alta la celda.
+                    final ratio = (count >= 6) ? 0.62 : 0.72;
+
+                    final itemHeight = itemWidth / ratio;
+
+                    return GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: paddingH, vertical: 8),
+                      itemCount: visibleProducts.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: count,
+                        crossAxisSpacing: spacing,
+                        mainAxisSpacing: spacing,
+                        mainAxisExtent: itemHeight, // <-- altura garantizada
+                      ),
+                      itemBuilder: (_, i) =>
+                          ProductCard(product: visibleProducts[i]),
+                    );
                   },
                 );
               },
@@ -205,19 +170,13 @@ class HomeScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            // ---------------------------
-            // FOOTER
-            // ---------------------------
             Container(
               color: Colors.black,
               padding: const EdgeInsets.all(16.0),
               child: const Center(
                 child: Text(
                   '© 2025 UD Electronics. Todos los derechos reservados.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.white,
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.white),
                 ),
               ),
             ),
