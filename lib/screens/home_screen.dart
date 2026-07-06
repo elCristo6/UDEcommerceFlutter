@@ -1,6 +1,5 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../providers/product_provider.dart';
 import '../widgets/image_carousel.dart';
 import '../widgets/least_selling_carousel.dart';
@@ -8,6 +7,7 @@ import '../widgets/product_card.dart';
 import '../widgets/search_bar.dart' as custom;
 import '../widgets/top_selling_carousel.dart';
 import '../widgets/whatsapp_logo_widget.dart';
+import '../widgets/store_footer.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -64,16 +64,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (width >= 820) return 4;
     if (width >= 600) return 3;
     return 2;
-  }
-
-  double _bannerHeightForWidth(double w) {
-    // Ajusta estos números a tu gusto.
-    // Objetivo: estilo "banner grande" tipo la referencia.
-    if (w >= 1400) return 460; // desktop grande
-    if (w >= 1200) return 420; // desktop normal
-    if (w >= 992) return 360; // laptop
-    if (w >= 768) return 300; // tablet
-    return 220; // móvil
   }
 
   @override
@@ -180,6 +170,69 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+      floatingActionButton: const WhatsAppLogoWidget(),
+    );
+  }
+}
+*/
+// home_screen.dart
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/product_provider.dart';
+import '../widgets/image_carousel.dart';
+import '../widgets/least_selling_carousel.dart';
+import '../widgets/search_bar.dart' as custom;
+import '../widgets/top_selling_carousel.dart';
+import '../widgets/whatsapp_logo_widget.dart';
+import '../widgets/store_footer.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  Future<void> _refresh() async {
+    await context.read<ProductProvider>().fetchProducts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: custom.SearchBar(
+        onSubmitted: (query) {
+          context.read<ProductProvider>().filterProducts(query);
+          Navigator.pushNamed(context, '/infoProducts', arguments: query);
+        },
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: ListView(
+          physics: const ClampingScrollPhysics(),
+          children: [ // ✅ CORREGIDO: Retirado el const global de la lista
+            // 1. Banner Principal de la Tienda (Hero Asset)
+            const AspectRatio(
+              aspectRatio: 2.7,
+              child: ImageCarousel(),
+            ),
+            const SizedBox(height: 18),
+
+            // 2. Carrusel Más Vendidos (Social Proof y Rotación Rápida)
+            const TopSellingCarousel(),
+            const SizedBox(height: 18),
+
+            // 3. Carrusel De Liquidación / Liquidación Dinámica de Ofertas
+            const LeastSellingCarousel(),
+            const SizedBox(height: 36),
+
+            // 4. Cierre Masivo Corporativo e Institucional (SEO Técnico)
+            const StoreFooter(), // ✅ Ahora puede computar de forma dinámica
           ],
         ),
       ),

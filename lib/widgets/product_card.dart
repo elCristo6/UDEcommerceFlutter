@@ -1,3 +1,4 @@
+
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -12,9 +13,14 @@ import '../screens/product_detail_screen.dart';
 class ProductCard extends StatefulWidget {
   final Product product;
 
+  /// compact = ideal para carruseles horizontales
+  /// compact = false para grid principal
+  final bool compact;
+
   const ProductCard({
     super.key,
     required this.product,
+    this.compact = false,
   });
 
   @override
@@ -32,16 +38,19 @@ class _ProductCardState extends State<ProductCard> {
 
   bool get _isDesktopHover =>
       kIsWeb ||
-      {TargetPlatform.macOS, TargetPlatform.windows, TargetPlatform.linux}
-          .contains(Theme.of(context).platform);
+      {
+        TargetPlatform.macOS,
+        TargetPlatform.windows,
+        TargetPlatform.linux,
+      }.contains(Theme.of(context).platform);
 
   Future<void> _addToCart(BuildContext context) async {
     final auth = context.read<AuthProvider>();
     final cart = context.read<CartProvider>();
 
-    final String? token = auth.token;
+    final token = auth.token;
+    final role = auth.role;
     final appliedPrice = widget.product.price.toInt();
-    final role = auth.role; // 'admin' o 'user' etc
 
     await cart.addProduct(
       widget.product,
@@ -52,12 +61,34 @@ class _ProductCardState extends State<ProductCard> {
     );
 
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${widget.product.name} agregado a la cesta'),
         duration: const Duration(seconds: 2),
       ),
     );
+  }
+// Redirección nativa leyendo el String real desde el documento de Mongoose
+  void _openDetail(BuildContext context) {
+    final realSlug = widget.product.slug; 
+    
+    if (realSlug.isNotEmpty) {
+      // Inyecta directamente la URL limpia en la raíz de Chrome
+      Navigator.pushNamed(
+        context,
+        '/$realSlug',
+      );
+    } else {
+      // Si no existe, no navegamos a una ruta inventada, reportamos el log técnico para corregir el producto
+      debugPrint("Error: El producto con ID ${widget.product.id} no posee la propiedad 'slug' migrada en el backend.");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este producto está en mantenimiento de indexación.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
   }
 
   void _preview(BuildContext context) {
@@ -67,86 +98,61 @@ class _ProductCardState extends State<ProductCard> {
       context: context,
       barrierDismissible: true,
       builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
+          constraints: const BoxConstraints(maxWidth: 560),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                   child: AspectRatio(
-                    aspectRatio: 16 / 9,
+                    aspectRatio: 16 / 10,
                     child: _ProductImage(
                       url: p.images.isNotEmpty ? p.images.first : null,
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                     ),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(
                   p.name,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                     height: 1.15,
+                    color: Color(0xFF0F172A),
                   ),
                 ),
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.check_circle,
-                      size: 16,
-                      color: (p.stock <= 0)
-                          ? Colors.grey
-                          : const Color(0xFF16A34A),
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'Stock: ${p.stock} disponibles',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: (p.stock <= 0)
-                            ? Colors.grey.shade700
-                            : const Color(0xFF166534),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
+                _StockRow(stock: p.stock),
+                const SizedBox(height: 12),
                 Text(
-                  'COP ${p.price}',
+                  _formatCop(p.price),
                   style: const TextStyle(
-                    fontSize: 22,
+                    fontSize: 26,
                     fontWeight: FontWeight.w900,
                     color: Color(0xFF0F172A),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 Row(
                   children: [
                     Expanded(
                       child: OutlinedButton.icon(
                         onPressed: () {
                           Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ProductDetailScreen(product: p),
-                            ),
-                          );
+                          _openDetail(context);
                         },
                         icon: const Icon(Icons.visibility_outlined),
                         label: const Text('Ver ficha'),
                         style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
@@ -165,7 +171,7 @@ class _ProductCardState extends State<ProductCard> {
                         icon: const Icon(Icons.shopping_cart_outlined),
                         label: const Text('Añadir'),
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 13),
                           backgroundColor: const Color(0xFF2563EB),
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
@@ -184,10 +190,39 @@ class _ProductCardState extends State<ProductCard> {
     );
   }
 
+  static String _formatCop(num value) {
+    final raw = value.toStringAsFixed(value % 1 == 0 ? 0 : 2);
+    final parts = raw.split('.');
+    final intPart = parts[0];
+    final decimalPart = parts.length > 1 ? parts[1] : null;
+
+    final buffer = StringBuffer();
+    for (int i = 0; i < intPart.length; i++) {
+      final positionFromEnd = intPart.length - i;
+      buffer.write(intPart[i]);
+      if (positionFromEnd > 1 && positionFromEnd % 3 == 1) {
+        buffer.write('.');
+      }
+    }
+
+    return decimalPart == null || decimalPart == '00'
+        ? 'COP ${buffer.toString()}'
+        : 'COP ${buffer.toString()},$decimalPart';
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = widget.product;
     final isNew = _isNew(p);
+
+    final isCompact = widget.compact;
+
+    final titleFontSize = isCompact ? 16.0 : 18.0;
+    final priceFontSize = isCompact ? 22.0 : 26.0;
+    final horizontalPadding = isCompact ? 14.0 : 16.0;
+    final verticalPadding = isCompact ? 12.0 : 14.0;
+    final imageFlex = isCompact ? 56 : 60;
+    final infoFlex = isCompact ? 44 : 40;
 
     return MouseRegion(
       onEnter: (_) {
@@ -198,101 +233,91 @@ class _ProductCardState extends State<ProductCard> {
       },
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: () {
-          // mobile/normal tap -> ficha técnica
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => ProductDetailScreen(product: p),
-            ),
-          );
-        },
-        child: Container(
+        onTap: () => _openDetail(context),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
           clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
-            borderRadius: BorderRadius.circular(22),
+            borderRadius: BorderRadius.circular(isCompact ? 20 : 22),
+            border: Border.all(
+              color: _hover ? const Color(0xFFBFDBFE) : const Color(0xFFF1F5F9),
+              width: 1.1,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 18,
-                offset: const Offset(0, 10),
+                color: Colors.black.withOpacity(_hover ? 0.10 : 0.06),
+                blurRadius: _hover ? 24 : 16,
+                offset: Offset(0, _hover ? 12 : 8),
               ),
             ],
           ),
           child: Stack(
             children: [
-              // ======= CONTENT (tu tarjeta limpia) =======
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // IMAGEN GRANDE
                   Expanded(
-                    flex: 60,
+                    flex: imageFlex,
                     child: Stack(
                       children: [
-                        _ProductImage(
-                          url: p.images.isNotEmpty ? p.images.first : null,
-                          fit: BoxFit.contain,
+                        Container(
+                          color: const Color(0xFFF8FAFC),
+                          child: Padding(
+                            padding: EdgeInsets.all(isCompact ? 14 : 18),
+                            child: _ProductImage(
+                              url: p.images.isNotEmpty ? p.images.first : null,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
                         ),
                         if (isNew)
-                          const Positioned(
-                            top: 14,
-                            left: 14,
-                            child: _NewBadge(),
+                          Positioned(
+                            top: 12,
+                            left: 12,
+                            child: _NewBadge(compact: isCompact),
                           ),
                       ],
                     ),
                   ),
-
-                  // INFO
                   Expanded(
-                    flex: 40,
+                    flex: infoFlex,
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                      padding: EdgeInsets.fromLTRB(
+                        horizontalPadding,
+                        verticalPadding,
+                        horizontalPadding,
+                        isCompact ? 14 : 16,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             p.name,
-                            maxLines: 2,
+                            maxLines: isCompact ? 2 : 2,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                              height: 1.1,
+                            style: TextStyle(
+                              fontSize: titleFontSize,
+                              fontWeight: FontWeight.w800,
+                              height: 1.12,
+                              color: const Color(0xFF111827),
+                              letterSpacing: -0.2,
                             ),
                           ),
                           const SizedBox(height: 10),
-                          Row(
-                            children: [
-                              Icon(
-                                Icons.check_circle,
-                                size: 16,
-                                color: (p.stock <= 0)
-                                    ? Colors.grey
-                                    : const Color(0xFF16A34A),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                'Stock: ${p.stock} disponibles',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: (p.stock <= 0)
-                                      ? Colors.grey.shade700
-                                      : const Color(0xFF166534),
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
+                          _StockRow(stock: p.stock, compact: isCompact),
                           const Spacer(),
                           Text(
-                            'COP ${p.price}',
-                            style: const TextStyle(
-                              fontSize: 26,
+                            _formatCop(p.price),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: priceFontSize,
                               fontWeight: FontWeight.w900,
-                              color: Color(0xFF0F172A),
+                              color: const Color(0xFF0F172A),
+                              letterSpacing: -0.4,
+                              height: 1,
                             ),
                           ),
                         ],
@@ -301,22 +326,22 @@ class _ProductCardState extends State<ProductCard> {
                   ),
                 ],
               ),
-
-              // ======= HOVER OVERLAY (2 botones) =======
               if (_isDesktopHover)
                 AnimatedOpacity(
                   opacity: _hover ? 1 : 0,
-                  duration: const Duration(milliseconds: 140),
+                  duration: const Duration(milliseconds: 150),
                   curve: Curves.easeOut,
                   child: IgnorePointer(
                     ignoring: !_hover,
                     child: Container(
-                      color: Colors.black.withOpacity(0.22),
+                      color: Colors.black.withOpacity(0.20),
                       child: BackdropFilter(
-                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                         child: Center(
                           child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 220),
+                            constraints: BoxConstraints(
+                              maxWidth: isCompact ? 190 : 220,
+                            ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -330,13 +355,15 @@ class _ProductCardState extends State<ProductCard> {
                                         Icons.shopping_cart_outlined),
                                     label: const Text('Añadir'),
                                     style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14),
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: isCompact ? 12 : 14,
+                                      ),
                                       backgroundColor: const Color(0xFF2563EB),
                                       foregroundColor: Colors.white,
-                                      textStyle: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w900,
+                                      elevation: 0,
+                                      textStyle: TextStyle(
+                                        fontSize: isCompact ? 14 : 16,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
@@ -350,16 +377,19 @@ class _ProductCardState extends State<ProductCard> {
                                   child: OutlinedButton.icon(
                                     onPressed: () => _preview(context),
                                     icon: const Icon(Icons.visibility_outlined),
-                                    label: const Text('Previsualizar'),
+                                    label: const Text('Vista rápida'),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 14),
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: isCompact ? 12 : 14,
+                                      ),
                                       foregroundColor: Colors.white,
                                       side: const BorderSide(
-                                          color: Colors.white, width: 1.2),
-                                      textStyle: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w900,
+                                        color: Colors.white,
+                                        width: 1.2,
+                                      ),
+                                      textStyle: TextStyle(
+                                        fontSize: isCompact ? 14 : 16,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                       shape: RoundedRectangleBorder(
                                         borderRadius: BorderRadius.circular(14),
@@ -383,8 +413,48 @@ class _ProductCardState extends State<ProductCard> {
   }
 }
 
+class _StockRow extends StatelessWidget {
+  final int stock;
+  final bool compact;
+
+  const _StockRow({
+    required this.stock,
+    this.compact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final inStock = stock > 0;
+
+    return Row(
+      children: [
+        Icon(
+          inStock ? Icons.check_circle : Icons.remove_circle_outline,
+          size: compact ? 15 : 16,
+          color: inStock ? const Color(0xFF16A34A) : Colors.grey,
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            'Stock: $stock disponibles',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: compact ? 12.5 : 13,
+              color: inStock ? const Color(0xFF166534) : Colors.grey.shade700,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _NewBadge extends StatelessWidget {
-  const _NewBadge();
+  final bool compact;
+
+  const _NewBadge({this.compact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -394,19 +464,22 @@ class _NewBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
+            color: Colors.black.withOpacity(0.14),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
         ],
       ),
-      child: const Padding(
-        padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Padding(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 10 : 14,
+          vertical: compact ? 6 : 8,
+        ),
         child: Text(
           'Nuevo',
           style: TextStyle(
             color: Colors.white,
-            fontSize: 13,
+            fontSize: compact ? 11.5 : 13,
             fontWeight: FontWeight.w900,
           ),
         ),
@@ -419,7 +492,10 @@ class _ProductImage extends StatelessWidget {
   final String? url;
   final BoxFit fit;
 
-  const _ProductImage({this.url, this.fit = BoxFit.cover});
+  const _ProductImage({
+    this.url,
+    this.fit = BoxFit.contain,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -427,8 +503,11 @@ class _ProductImage extends StatelessWidget {
       return Container(
         color: Colors.white,
         alignment: Alignment.center,
-        child:
-            const Icon(Icons.image_not_supported, size: 48, color: Colors.grey),
+        child: const Icon(
+          Icons.image_not_supported_outlined,
+          size: 42,
+          color: Colors.grey,
+        ),
       );
     }
 
@@ -438,10 +517,16 @@ class _ProductImage extends StatelessWidget {
       alignment: Alignment.center,
       loadingBuilder: (_, child, progress) {
         if (progress == null) return child;
-        return const Center(child: CircularProgressIndicator(strokeWidth: 2));
+        return const Center(
+          child: SizedBox(
+            width: 24,
+            height: 24,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
       },
       errorBuilder: (_, __, ___) => const Center(
-        child: Icon(Icons.broken_image, size: 48),
+        child: Icon(Icons.broken_image_outlined, size: 42, color: Colors.grey),
       ),
     );
   }

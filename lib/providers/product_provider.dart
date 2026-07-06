@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../models/product_model.dart';
+import '../models/product_pdp_model.dart';
 import '../providers/invoice_provider.dart';
 import '../services/product_service.dart';
 
@@ -11,6 +12,10 @@ class ProductProvider with ChangeNotifier {
     fetchProducts();
     fetchTopSellingProducts();
     fetchLeastSellingProducts();
+    fetchNewArrivalsProducts();
+    fetchHighStockProducts();
+    fetchLeastStockProducts();
+    fetchLowStockProducts();
   }
   List<Product> _products = [];
   List<Product> _cart = [];
@@ -46,6 +51,50 @@ class ProductProvider with ChangeNotifier {
 
   List<Product> get leastSellingProducts => _leastSellingProducts;
   bool get isLoadingLeastSelling => _loadingLeastSelling;
+  List<Product> _newArrivalsProducts = [];
+  List<Product> _highStockProducts = [];
+  List<Product> _leastStockProducts = [];
+
+  bool _loadingNewArrivals = false;
+  bool _loadingHighStock = false;
+  bool _loadingLeastStock = false;
+
+  List<Product> get newArrivalsProducts => _newArrivalsProducts;
+  List<Product> get highStockProducts => _highStockProducts;
+  List<Product> get leastStockProducts => _leastStockProducts;
+
+  bool get isLoadingNewArrivals => _loadingNewArrivals;
+  bool get isLoadingHighStock => _loadingHighStock;
+  bool get isLoadingLeastStock => _loadingLeastStock;
+  List<Product> _lowStockProducts = [];
+  bool _loadingLowStock = false;
+
+  List<Product> get lowStockProducts => _lowStockProducts;
+  bool get isLoadingLowStock => _loadingLowStock;
+
+// Variables de estado para la vista de detalle unificado (PDP)
+  ProductPdpData? _currentPdpProduct;
+  bool _isLoadingPdp = false;
+
+  ProductPdpData? get currentPdpProduct => _currentPdpProduct;
+  bool get isLoadingPdp => _isLoadingPdp;
+
+  // Método reactivo para solicitar los datos CRO del backend antes de pintar el UI
+  Future<void> fetchProductDetailBySlug(String slug) async {
+    _isLoadingPdp = true;
+    _currentPdpProduct = null; // Limpieza previa para evitar flashes de info vieja
+    notifyListeners();
+
+    try {
+      _currentPdpProduct = await _service.getProductDetailBySlug(slug);
+    } catch (e) {
+      debugPrint("Error cargando el PDP en Provider: $e");
+      _currentPdpProduct = null;
+    } finally {
+      _isLoadingPdp = false;
+      notifyListeners();
+    }
+  }
 
   Future<void> fetchLeastSellingProducts() async {
     _loadingLeastSelling = true;
@@ -276,5 +325,75 @@ class ProductProvider with ChangeNotifier {
       _products[idx] = updated;
       notifyListeners();
     }
+  }
+
+  Future<void> fetchNewArrivalsProducts({int limit = 100}) async {
+    _loadingNewArrivals = true;
+    notifyListeners();
+
+    try {
+      _newArrivalsProducts =
+          await _service.fetchNewArrivalsProducts(limit: limit);
+    } catch (e) {
+      _newArrivalsProducts = [];
+    }
+
+    _loadingNewArrivals = false;
+    notifyListeners();
+  }
+
+  Future<void> fetchHighStockProducts({int limit = 100}) async {
+    _loadingHighStock = true;
+    notifyListeners();
+
+    try {
+      _highStockProducts = await _service.fetchHighStockProducts(limit: limit);
+    } catch (e) {
+      _highStockProducts = [];
+    }
+
+    _loadingHighStock = false;
+    notifyListeners();
+  }
+
+  Future<void> fetchLeastStockProducts({int limit = 100}) async {
+    _loadingLeastStock = true;
+    notifyListeners();
+
+    try {
+      _leastStockProducts =
+          await _service.fetchLeastStockProducts(limit: limit);
+    } catch (e) {
+      _leastStockProducts = [];
+    }
+
+    _loadingLeastStock = false;
+    notifyListeners();
+  }
+
+  Future<void> fetchInventoryDashboard() async {
+    await Future.wait([
+      fetchProducts(forceUpdate: true),
+      fetchTopSellingProducts(),
+      fetchLeastSellingProducts(),
+      fetchNewArrivalsProducts(),
+      fetchHighStockProducts(),
+      fetchLeastStockProducts(),
+      fetchLowStockProducts(),
+    ]);
+  }
+
+  Future<void> fetchLowStockProducts({int limit = 100}) async {
+    _loadingLowStock = true;
+    notifyListeners();
+
+    try {
+      _lowStockProducts = await _service.fetchLowStockProducts(limit: limit);
+    } catch (e) {
+      _lowStockProducts = [];
+    }
+
+    _loadingLowStock = false;
+    notifyListeners();
   }
 }

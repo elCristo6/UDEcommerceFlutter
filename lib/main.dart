@@ -1,3 +1,4 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +8,7 @@ import 'providers/auth_provider.dart';
 import 'providers/cart_provider.dart';
 import 'providers/invoice_provider.dart';
 import 'providers/product_provider.dart';
+import 'screens/stock_screen.dart'; // ✅ CORREGIDO: Eliminado espacio en blanco ' screens/'
 //import 'screens/UnderConstructionScreen.dart';
 import 'screens/cesta_screen.dart';
 import 'screens/home_screen.dart';
@@ -36,39 +38,74 @@ class MyApp extends StatelessWidget {
           create: (_) => CartProvider()..initGuest(),
         )
       ],
-      child: MaterialApp(
-        navigatorKey: navigatorKey,
-        title: 'UD Electronics: Tienda de Robotica-Electronica-Impresion 3D',
-        theme: ThemeData(
-          primarySwatch: Colors.deepPurple,
-          visualDensity: VisualDensity.adaptivePlatformDensity,
-          fontFamily: 'Raleway',
-          textTheme: const TextTheme(
-            headlineLarge: TextStyle(
-                fontSize: 32.0,
-                fontWeight: FontWeight.bold), // Usar la nomenclatura correcta
-            bodyLarge:
-                TextStyle(fontSize: 16.0), // Usar la nomenclatura correcta
-          ),
-        ),
-        onGenerateRoute: (settings) {
-          if (settings.name == '/productDetail') {
-            final product = settings.arguments as Product;
-            return MaterialPageRoute(
-              builder: (_) => ProductDetailScreen(product: product),
-            );
+      child: GestureDetector(
+        onTap: () {
+          // ✅ SOLUCIÓN GLOBAL: Si el usuario hace clic en cualquier parte de la pantalla,
+          // quitamos el foco del teclado, forzando al buscador a replegarse de inmediato.
+          final currentFocus = FocusScope.of(context);
+          if (!currentFocus.hasPrimaryFocus && currentFocus.focusedChild != null) {
+            FocusManager.instance.primaryFocus?.unfocus();
           }
-          return null;
         },
-        //home: const UnderConstructionScreen(),
-        initialRoute: '/home', // Ruta inicial
-        routes: {
-          '/home': (context) => const HomeScreen(), // Pantalla principal
-          '/cesta': (context) => const CestaScreen(), // Pantalla de la cesta
-          '/sales': (context) => const SalesScreen(),
-          '/infoProducts': (context) => const ProductInfoScreen(),
-        },
-      ),
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'UD Electronics: Tienda de Robotica-Electronica-Impresion 3D',
+          theme: ThemeData(
+            primarySwatch: Colors.deepPurple,
+            visualDensity: VisualDensity.adaptivePlatformDensity,
+            fontFamily: 'Raleway',
+            textTheme: const TextTheme(
+              displayLarge: TextStyle(fontSize: 32.0, fontWeight: FontWeight.bold),
+              bodyLarge: TextStyle(fontSize: 16.0),
+            ),
+          ),
+          
+          // Saneamos la ruta inicial de arranque
+          initialRoute: '/home',
+
+          // Centralizamos TODO el enrutamiento aquí para evitar colisiones de rutas web
+          onGenerateRoute: (settings) {
+            final String routeName = settings.name ?? '';
+
+            // 1. Procesamos las pantallas estáticas fijas del sistema
+            if (routeName == '/home' || routeName == '/' || routeName.isEmpty) {
+              return MaterialPageRoute(settings: settings, builder: (_) => const HomeScreen());
+            }
+            if (routeName == '/cesta') {
+              return MaterialPageRoute(settings: settings, builder: (_) => const CestaScreen());
+            }
+            if (routeName == '/sales') {
+              return MaterialPageRoute(settings: settings, builder: (_) => const SalesScreen());
+            }
+            if (routeName == '/infoProducts') {
+              return MaterialPageRoute(settings: settings, builder: (_) => const ProductInfoScreen());
+            }
+            if (routeName == '/stock') {
+              return MaterialPageRoute(settings: settings, builder: (_) => const StockScreen());
+            }
+
+            // Compatibilidad por si alguna tarjeta vieja envía el objeto clásico
+            if (routeName == '/productDetail') {
+              final product = settings.arguments as Product;
+              return MaterialPageRoute(
+                settings: settings,
+                builder: (_) => ProductDetailScreen(product: product),
+              );
+            }
+
+            // Ignoramos solicitudes de archivos o recursos con punto (.)
+            if (routeName.contains('.')) return null;
+
+            // 2. Fallback Maestro: Cualquier otra palabra en la raíz es tratada como un Slug Puro de producto
+            final cleanSlug = routeName.startsWith('/') ? routeName.substring(1) : routeName;
+
+            return MaterialPageRoute(
+              settings: settings, // Mantiene la URL hermosa reflejada en la barra de Chrome
+              builder: (_) => ProductDetailScreen(productSlug: cleanSlug),
+            );
+          },
+        ),
+      ), // ✅ CORREGIDO: Añadido paréntesis de cierre correspondiente al MultiProvider
     );
   }
 }

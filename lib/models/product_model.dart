@@ -9,6 +9,7 @@ class Product {
   final List<String> images;
   final int stock;
   final String category;
+  final String slug;
   int quantity;
   final DateTime? updatedAt;
   
@@ -24,6 +25,7 @@ class Product {
     this.images = const [],
     required this.stock,
     required this.category,
+    this.slug = '',
     this.quantity = 1,
     this.updatedAt,
     this.cachedImageBytes, // nuevo
@@ -37,6 +39,7 @@ class Product {
     String? description,
     int? stock,
     String? category,
+    String? slug,
     int? quantity,
     List<int>? box,
     List<String>? images,
@@ -52,16 +55,28 @@ class Product {
       box: box ?? this.box,
       images: images ?? this.images,
       category: category ?? this.category,
+      slug: slug ?? this.slug,
       quantity: quantity ?? this.quantity,
       updatedAt: updatedAt ?? this.updatedAt,
       cachedImageBytes: cachedImageBytes ?? this.cachedImageBytes,
     );
   }
 
-  factory Product.fromJson(Map<String, dynamic> json) {
+   factory Product.fromJson(Map<String, dynamic> json) {
+    // 1. Capturamos el nombre para usarlo de respaldo si el slug viene ausente o vacío
+    final String productName = json['name'] ?? '';
+    
+    // 2. Leemos lo que envía el backend
+    String backendSlug = json['slug'] ?? '';
+    
+    // 3. Si el backend no envió el slug (común en agregaciones como top-selling), lo generamos de forma limpia
+    if (backendSlug.isEmpty && productName.isNotEmpty) {
+      backendSlug = productName.toLowerCase().trim().replaceAll(' ', '-');
+    }
+
     return Product(
-      id: json['_id'] ?? '',
-      name: json['name'] ?? '',
+      id: json['_id'] ?? json['id'] ?? '',
+      name: productName,
       price: (json['price'] != null)
           ? double.tryParse(json['price'].toString()) ?? 0.0
           : 0.0,
@@ -72,7 +87,6 @@ class Product {
               .map((e) => int.tryParse(e.toString()) ?? 0)
               .toList()
           : [],
-      
       images: json['images'] != null
           ? (json['images'] as List<dynamic>).map((e) => e.toString()).toList()
           : [],
@@ -80,6 +94,7 @@ class Product {
           ? int.tryParse(json['stock'].toString()) ?? 0
           : 0,
       category: json['category'] ?? 'Unknown',
+      slug: backendSlug, // 👈 ¡Blindado! Ahora se garantiza que los carruseles lleven un slug válido
       quantity: json['quantity'] != null
           ? int.tryParse(json['quantity'].toString()) ?? 1
           : 1,
@@ -98,6 +113,7 @@ class Product {
       'images': images,
       'stock': stock,
       'category': category,
+      'slug': slug,
       'quantity': quantity,
       'updatedAt': updatedAt?.toIso8601String(),
     };

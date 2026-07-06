@@ -6,7 +6,7 @@ import 'package:http_parser/http_parser.dart' show MediaType;
 
 import '../config/api_config.dart';
 import '../models/product_model.dart';
-
+import '../models/product_pdp_model.dart';
 class ProductService {
 // Para escritura (crear, actualizar, eliminar)
   static const String backendUrl = ApiConfig.baseUrl;
@@ -173,8 +173,8 @@ class ProductService {
 
   Future<List<Product>> getLeastSellingProducts({int limit = 20}) async {
     final response = await http.get(
-      // Uri.parse('${backendUrl}/products/least-selling?limit=$limit'),
-      Uri.parse('${backendUrl}/products/low-stock?limit=$limit'),
+      Uri.parse('${backendUrl}/products/least-selling?limit=$limit'),
+      //Uri.parse('${backendUrl}/products/low-stock?limit=$limit'),
     );
 
     if (response.statusCode == 200) {
@@ -183,6 +183,120 @@ class ProductService {
       return data.map((item) => Product.fromJson(item)).toList();
     } else {
       throw Exception('Error al cargar productos menos vendidos');
+    }
+  }
+
+  Future<List<Product>> fetchLeastSellingProducts({int limit = 20}) async {
+    final uri = Uri.parse('$backendUrl/products/least-selling?limit=$limit');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+      }
+
+      throw Exception('Respuesta inválida en productos menos vendidos');
+    }
+
+    throw Exception('Error al obtener productos menos vendidos');
+  }
+
+  Future<List<Product>> fetchNewArrivalsProducts({int limit = 100}) async {
+    final uri = Uri.parse('$backendUrl/products/new-arrivals?limit=$limit');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+      }
+
+      throw Exception('Respuesta inválida en productos nuevos');
+    }
+
+    throw Exception('Error al obtener productos nuevos');
+  }
+
+  Future<List<Product>> fetchHighStockProducts({int limit = 100}) async {
+    final uri = Uri.parse('$backendUrl/products/high-stock?limit=$limit');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+      }
+
+      throw Exception('Respuesta inválida en productos con alto stock');
+    }
+
+    throw Exception('Error al obtener productos con alto stock');
+  }
+
+  Future<List<Product>> fetchLeastStockProducts({int limit = 100}) async {
+    final uri = Uri.parse('$backendUrl/products/least-stock?limit=$limit');
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+      }
+
+      throw Exception('Respuesta inválida en productos con menor stock');
+    }
+
+    throw Exception('Error al obtener productos con menor stock');
+  }
+
+  Future<List<Product>> fetchLowStockProducts({int limit = 100}) async {
+    final uri = Uri.parse('$backendUrl/products/low-stock?limit=$limit');
+
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      final body = jsonDecode(response.body);
+
+      if (body['success'] == true && body['data'] is List) {
+        return (body['data'] as List)
+            .map((item) => Product.fromJson(item))
+            .toList();
+      }
+
+      throw Exception('Respuesta inválida en low stock');
+    }
+
+    throw Exception('Error al obtener productos low stock');
+  }
+  // =========================================================================
+  // NUEVO: Obtener detalle optimizado para PDP usando el Slug del producto
+  // =========================================================================
+  Future<ProductPdpData> getProductDetailBySlug(String slug) async {
+    final response = await http.get(Uri.parse('$backendUrl/products/pdp/$slug'));
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> responseData = jsonDecode(response.body);
+      if (responseData['success'] == true) {
+        // Mapeamos usando la nueva respuesta jerárquica de conversión
+        return ProductPdpResponse.fromJson(responseData).data;
+      } else {
+        throw Exception(responseData['message'] ?? 'Error al obtener detalles del PDP');
+      }
+    } else {
+      throw Exception('Fallo en la comunicación con el servidor: Código ${response.statusCode}');
     }
   }
 }
