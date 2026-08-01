@@ -9,6 +9,7 @@ class Product {
   final List<String> images;
   final int stock;
   final String category;
+  final List<String> categories;
   final String slug;
   int quantity;
   final DateTime? updatedAt;
@@ -25,6 +26,7 @@ class Product {
     this.images = const [],
     required this.stock,
     required this.category,
+    this.categories = const [],
     this.slug = '',
     this.quantity = 1,
     this.updatedAt,
@@ -44,6 +46,7 @@ class Product {
     List<int>? box,
     List<String>? images,
     DateTime? updatedAt,
+    List<String>? categories,
     Uint8List? cachedImageBytes,
   }) {
     return Product(
@@ -55,6 +58,7 @@ class Product {
       box: box ?? this.box,
       images: images ?? this.images,
       category: category ?? this.category,
+      categories: categories ?? this.categories,
       slug: slug ?? this.slug,
       quantity: quantity ?? this.quantity,
       updatedAt: updatedAt ?? this.updatedAt,
@@ -90,11 +94,21 @@ class Product {
       images: json['images'] != null
           ? (json['images'] as List<dynamic>).map((e) => e.toString()).toList()
           : [],
-      stock: json['stock'] != null
-          ? int.tryParse(json['stock'].toString()) ?? 0
-          : 0,
-      category: json['category'] ?? 'Unknown',
-      slug: backendSlug, // 👈 ¡Blindado! Ahora se garantiza que los carruseles lleven un slug válido
+          stock: json['stock'] != null
+    ? int.tryParse(json['stock'].toString()) ?? 0
+    : 0,
+category: json['category'] is Map<String, dynamic>
+    ? json['category']['name']?.toString() ?? ''
+    : json['category']?.toString() ?? '',
+categories: json['categories'] != null
+    ? (json['categories'] as List<dynamic>).map((e) {
+        if (e is Map<String, dynamic>) {
+          return e['_id']?.toString() ?? '';
+        }
+        return e.toString();
+      }).where((id) => id.isNotEmpty).toList()
+    : [],
+slug: backendSlug,
       quantity: json['quantity'] != null
           ? int.tryParse(json['quantity'].toString()) ?? 1
           : 1,
@@ -113,6 +127,7 @@ class Product {
       'images': images,
       'stock': stock,
       'category': category,
+      'categories': categories,
       'slug': slug,
       'quantity': quantity,
       'updatedAt': updatedAt?.toIso8601String(),

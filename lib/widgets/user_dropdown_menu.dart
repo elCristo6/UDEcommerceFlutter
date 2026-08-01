@@ -52,6 +52,7 @@ class _UserDropdownMenuState extends State<UserDropdownMenu> {
                       _menuItem(Icons.inventory_2_outlined, 'Inventario', '/stock'),
                       _menuItem(Icons.receipt_long_outlined, 'Ventas', '/sales'),
                       _menuItem(Icons.add_circle_outline, 'Info productos', '/infoProducts'),
+                      _menuItem(Icons.handshake_outlined, 'Préstamos B2B', '/loans'),
                       const Divider(color: Color(0xFF253449)),
                     ],
                     ListTile(

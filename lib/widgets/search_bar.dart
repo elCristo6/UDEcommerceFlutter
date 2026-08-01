@@ -1,643 +1,25 @@
-// search_bar.dart
-/*import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:ud_store_flutter_app/main.dart';
-
-import '../providers/cart_provider.dart';
-import '../providers/product_provider.dart';
-import 'user_dropdown_menu.dart';
-
-class SearchBar extends StatelessWidget implements PreferredSizeWidget {
-  final String hintText;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
-
-  const SearchBar({
-    Key? key,
-    this.hintText = 'Buscar...',
-    this.onChanged,
-    this.onSubmitted,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final isMobile = MediaQuery.of(context).size.width < 850;
-
-    return isMobile
-        ? MobileSearchBar(
-            hintText: hintText,
-            onChanged: onChanged,
-            onSubmitted: onSubmitted,
-          )
-        : SearchBarDesktop(
-            hintText: hintText,
-            onChanged: onChanged,
-            onSubmitted: onSubmitted,
-          );
-  }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(135);
-}
-
-/// ============================================================================
-/// COMPONENTE MÓVIL OPTIMIZADO CRO (UNIFICADO Y BLINDADO)
-/// ============================================================================
-
-class MobileSearchBar extends StatefulWidget implements PreferredSizeWidget {
-  final String hintText;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
-
-  const MobileSearchBar({
-    Key? key,
-    this.hintText = 'Buscar...',
-    this.onChanged,
-    this.onSubmitted,
-  }) : super(key: key);
-
-  @override
-  State<MobileSearchBar> createState() => _MobileSearchBarState();
-
-  @override
-  Size get preferredSize => const Size.fromHeight(135);
-}
-
-class _MobileSearchBarState extends State<MobileSearchBar> {
-  final FocusNode _mobileFocusNode = FocusNode();
-
-  @override
-  void initState() {
-    super.initState();
-    _mobileFocusNode.addListener(() {
-      if (!_mobileFocusNode.hasFocus) {
-        FocusManager.instance.primaryFocus?.unfocus();
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AppBar(
-          backgroundColor: Colors.black,
-          elevation: 4.0,
-          automaticallyImplyLeading: false,
-          title: Row(
-            children: [
-              // Logo Profesional E-commerce Adaptado a Móviles
-              GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/home'),
-                child: Container(
-                  width: MediaQuery.of(context).size.width * 0.16,
-                  height: 44,
-                  alignment: Alignment.center,
-                  child: Image.asset(
-                    'assets/UDElectronics.com.png',
-                    fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) => const Icon(Icons.flash_on, color: Colors.amber, size: 24),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-
-              // Barra de Búsqueda Centrada
-              Expanded(
-                child: Container(
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30.0),
-                  ),
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 12),
-                      const Icon(Icons.search, color: Colors.black54, size: 18),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: TextField(
-                          focusNode: _mobileFocusNode,
-                          onChanged: widget.onChanged,
-                          onSubmitted: widget.onSubmitted,
-                          style: const TextStyle(color: Colors.black, fontSize: 14),
-                          decoration: InputDecoration(
-                            hintText: widget.hintText,
-                            hintStyle: const TextStyle(color: Colors.black54, fontSize: 14),
-                            border: InputBorder.none,
-                            isDense: true,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 6),
-              const UserDropdownMenu(),
-              const SizedBox(width: 4),
-              _iconButton(context, Icons.receipt_long_outlined, '', '/sales'),
-              const SizedBox(width: 4),
-              _cartIcon(context),
-            ],
-          ),
-        ),
-
-        // Categorías Horizontales
-        Container(
-          color: Colors.black,
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: const SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: BouncingScrollPhysics(),
-            child: Row(
-              children: [
-                SizedBox(width: 15),
-                Text('Ofertas', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Novedades', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Servicios', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Robótica', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Kits Educativos', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Amplificadores', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Impresión 3D', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 18),
-                Text('Ventas', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-                SizedBox(width: 15),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _iconButton(BuildContext context, IconData icon, String label, String route) {
-    return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, route),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.white, size: 24),
-            if (label.isNotEmpty)
-              Text(label, style: const TextStyle(color: Colors.white, fontSize: 10)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _cartIcon(BuildContext context) {
-    final cartProvider = Provider.of<CartProvider>(context);
-    final itemCount = cartProvider.totalItems;
-
-    return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/cesta'),
-      child: Padding(
-        padding: const EdgeInsets.only(right: 4),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              height: 38,
-              width: 38,
-              decoration: const BoxDecoration(
-                color: Colors.blue,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.shopping_cart, color: Colors.white, size: 20),
-            ),
-            Positioned(
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.all(3),
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                child: Text(
-                  itemCount.toString(),
-                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// ============================================================================
-/// COMPONENTE ESCRITORIO OPTIMIZADO CRO (UNIFICADO)
-/// ============================================================================
-
-class SearchBarDesktop extends StatefulWidget implements PreferredSizeWidget {
-  final String hintText;
-  final ValueChanged<String>? onChanged;
-  final ValueChanged<String>? onSubmitted;
-
-  const SearchBarDesktop({
-    Key? key,
-    this.hintText = 'Buscar...',
-    this.onChanged,
-    this.onSubmitted,
-  }) : super(key: key);
-
-  @override
-  _SearchBarDesktopState createState() => _SearchBarDesktopState();
-
-  @override
-  Size get preferredSize => const Size.fromHeight(140);
-}
-
-class _SearchBarDesktopState extends State<SearchBarDesktop> {
-  final FocusNode _focusNode = FocusNode();
-  final GlobalKey _textFieldKey = GlobalKey();
-  OverlayEntry? _overlayEntry;
-  bool _hoveringOverlay = false;
-
-  void _showOverlay() {
-    final renderBox = _textFieldKey.currentContext!.findRenderObject() as RenderBox;
-    final size = renderBox.size;
-    final offset = renderBox.localToGlobal(Offset.zero);
-
-    int hoverIndex = -1; 
-
-    _overlayEntry = OverlayEntry(
-      builder: (_) => Positioned(
-        left: offset.dx,
-        top: offset.dy + size.height,
-        width: size.width,
-        child: MouseRegion(
-            onEnter: (_) => _hoveringOverlay = true,
-            onExit: (_) => _hoveringOverlay = false,
-            child: Material(
-              elevation: 10,
-              borderRadius: BorderRadius.circular(14),
-              child: StatefulBuilder(
-                builder: (context, setOverlayState) {
-                  return Container(
-                    constraints: const BoxConstraints(maxHeight: 320),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Consumer<ProductProvider>(
-                      builder: (context, provider, _) {
-                        final products = provider.filteredProducts;
-
-                        if (products.isEmpty) {
-                          return const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: Text('No se encontraron productos.'),
-                          );
-                        }
-
-                        return ListView.builder(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final product = products[index];
-                            final isHover = hoverIndex == index;
-
-                            return MouseRegion(
-                              cursor: SystemMouseCursors.click,
-                              onEnter: (_) => setOverlayState(() => hoverIndex = index),
-                              onExit: (_) => setOverlayState(() => hoverIndex = -1),
-                              child: InkWell(
-                                onTap: () {
-                                  _removeOverlay();
-                                  _focusNode.unfocus();
-
-                                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                                    final targetRoute = product.slug.isNotEmpty 
-                                        ? '/${product.slug}' 
-                                        : '/${product.name.toLowerCase().trim().replaceAll(' ', '-')}';
-                                    
-                                    navigatorKey.currentState?.pushNamed(targetRoute);
-                                  });
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 140),
-                                  curve: Curves.easeOut,
-                                  padding: const EdgeInsets.all(12),
-                                  margin: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: isHover ? const Color(0xFFF2F7FF) : Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isHover ? Colors.blue : Colors.transparent,
-                                      width: 1.2,
-                                    ),
-                                    boxShadow: isHover
-                                        ? [
-                                            BoxShadow(
-                                              color: Colors.black.withOpacity(0.10),
-                                              blurRadius: 16,
-                                              offset: const Offset(0, 10),
-                                            )
-                                          ]
-                                        : [],
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: product.images.isNotEmpty
-                                            ? Image.network(
-                                                Uri.encodeFull(product.images.first),
-                                                width: 56,
-                                                height: 56,
-                                                fit: BoxFit.cover,
-                                              )
-                                            : Container(
-                                                width: 56,
-                                                height: 56,
-                                                color: Colors.grey[300],
-                                                child: const Icon(Icons.image, size: 28),
-                                              ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          product.name,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: isHover ? FontWeight.w800 : FontWeight.w600,
-                                          ),
-                                        ),
-                                      ),
-                                      if (isHover)
-                                        const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.blue),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
-                    ),
-                  );
-                },
-              ),
-            )),
-      ),
-    );
-
-    Overlay.of(context).insert(_overlayEntry!);
-  }
-
-  void _removeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus) {
-        _showOverlay();
-      } else {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted) return;
-          if (!_hoveringOverlay) { 
-            _removeOverlay();
-          }
-        });
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final productProvider = Provider.of<ProductProvider>(context);
-
-    return Stack(
-      children: [
-        Container(
-          color: Colors.black,
-          child: Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.pushNamed(context, '/home'),
-                child: Container(
-                  width: MediaQuery.of(context).size.width * 0.09,
-                  height: 200,
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      right: BorderSide(color: Colors.white, width: 0.2),
-                    ),
-                  ),
-                  alignment: Alignment.center,
-                  child: Image.asset(
-                    'assets/UDElectronics.com.png',
-                    fit: BoxFit.contain,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12.0),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Row(
-                            children: [
-                              Icon(Icons.menu, color: Colors.white, size: 30),
-                              SizedBox(width: 5),
-                              Text(
-                                'Categorías',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 27.5,
-                                  fontWeight: FontWeight.w600,
-                                  fontFamily: 'Roboto',
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 15),
-                          Expanded(
-                            child: Container(
-                              height: 40,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(30.0),
-                              ),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: TextField(
-                                      key: _textFieldKey,
-                                      focusNode: _focusNode,
-                                      onChanged: (value) {
-                                        productProvider.filterProducts(value);
-                                        setState(() {});
-                                      },
-                                      onSubmitted: widget.onSubmitted,
-                                      decoration: const InputDecoration(
-                                        hintText: 'Buscar...',
-                                        hintStyle: TextStyle(color: Colors.black54),
-                                        border: InputBorder.none,
-                                        contentPadding: EdgeInsets.symmetric(horizontal: 30.0, vertical: 15),
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 5.0),
-                                    height: 35,
-                                    width: 50,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black,
-                                      borderRadius: BorderRadius.circular(30.0),
-                                    ),
-                                    child: const Icon(Icons.search, color: Colors.white),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          const UserDropdownMenu(),
-                          const SizedBox(width: 10),
-                          _navItem(context, '/cesta', Icons.shopping_cart, '', showBadge: true),
-                        ],
-                      ),
-                    ),
-                    const Divider(color: Colors.white, thickness: 1.7),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        physics: const BouncingScrollPhysics(),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: const [
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Ofertas', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Novedades', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Servicios', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Robótica', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Kits Educativos', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Amplificadores', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Impresión 3D', style: _menuStyle)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 14.0), child: Text('Ventas', style: _menuStyle)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  static const TextStyle _menuStyle = TextStyle(
-    color: Colors.white,
-    fontSize: 20,
-    fontFamily: 'Roboto',
-    fontWeight: FontWeight.w500,
-  );
-
-  Widget _navItem(
-      BuildContext context, String route, IconData icon, String label,
-      {bool showBadge = false}) {
-    final cartProvider = Provider.of<CartProvider>(context);
-    final itemCount = cartProvider.totalItems;
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: () => Navigator.pushNamed(context, route),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(
-                height: 45,
-                width: 45,
-                decoration: const BoxDecoration(
-                  color: Colors.blue,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, color: Colors.white, size: 30),
-              ),
-              if (showBadge)
-                Positioned(
-                  right: 4,
-                  top: 4,
-                  child: Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      color: Colors.red,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      itemCount.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 5),
-        Text(label, style: _menuStyle),
-      ],
-    );
-  }
-}*/
-
-// search_bar.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:ud_store_flutter_app/main.dart';
 
+import '../models/product_model.dart';
 import '../providers/cart_provider.dart';
 import '../providers/product_provider.dart';
 import 'user_dropdown_menu.dart';
 
 class SearchBar extends StatelessWidget implements PreferredSizeWidget {
   final String hintText;
+  final String initialQuery;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   const SearchBar({
-    Key? key,
-    this.hintText = 'Buscar productos, Marca y más...',
+    super.key,
+    this.hintText = 'Buscar productos, marca y más...',
+    this.initialQuery = '',
     this.onChanged,
     this.onSubmitted,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -649,11 +31,13 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
       child: isMobile
           ? MobileSearchBar(
               hintText: hintText,
+              initialQuery: initialQuery,
               onChanged: onChanged,
               onSubmitted: onSubmitted,
             )
           : SearchBarDesktop(
               hintText: hintText,
+              initialQuery: initialQuery,
               onChanged: onChanged,
               onSubmitted: onSubmitted,
             ),
@@ -668,32 +52,176 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
 /// MÓVIL
 /// ============================================================================
 
-class MobileSearchBar extends StatefulWidget implements PreferredSizeWidget {
+class MobileSearchBar extends StatefulWidget
+    implements PreferredSizeWidget {
   final String hintText;
+  final String initialQuery;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   const MobileSearchBar({
-    Key? key,
-    this.hintText = 'Buscar...',
+    super.key,
+    this.hintText = 'Buscar productos...',
+    this.initialQuery = '',
     this.onChanged,
     this.onSubmitted,
-  }) : super(key: key);
+  });
 
   @override
-  State<MobileSearchBar> createState() => _MobileSearchBarState();
+  State<MobileSearchBar> createState() =>
+      _MobileSearchBarState();
 
   @override
   Size get preferredSize => const Size.fromHeight(76);
 }
 
-class _MobileSearchBarState extends State<MobileSearchBar> {
+class _MobileSearchBarState
+    extends State<MobileSearchBar> {
   final FocusNode _mobileFocusNode = FocusNode();
+
+  final TextEditingController _mobileSearchController =
+      TextEditingController();
+
+  OverlayEntry? _mobileOverlayEntry;
+
+  String _currentQuery = '';
+
+
+
+  @override
+  void initState() {
+    super.initState();
+
+    _currentQuery = widget.initialQuery;
+
+    _mobileSearchController.text =
+        widget.initialQuery;
+
+    _mobileSearchController.selection =
+        TextSelection.collapsed(
+      offset: _mobileSearchController.text.length,
+    );
+
+    _mobileFocusNode.addListener(
+      _handleMobileFocusChange,
+    );
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant MobileSearchBar oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.initialQuery !=
+        widget.initialQuery) {
+      _currentQuery = widget.initialQuery;
+
+      _mobileSearchController.text =
+          widget.initialQuery;
+
+      _mobileSearchController.selection =
+          TextSelection.collapsed(
+        offset:
+            _mobileSearchController.text.length,
+      );
+
+      if (mounted) {
+        setState(() {});
+      }
+    }
+  }
+
+  void _handleMobileFocusChange() {
+    if (_mobileFocusNode.hasFocus) {
+      if (_currentQuery.trim().isNotEmpty) {
+        _showMobileOverlay();
+      }
+
+      return;
+    }
+
+    Future.delayed(
+      const Duration(milliseconds: 180),
+      () {
+        if (!mounted) return;
+
+        _removeMobileOverlay();
+        
+      },
+    );
+  }
 
   @override
   void dispose() {
+    _removeMobileOverlay();
+
+    _mobileFocusNode
+        .removeListener(_handleMobileFocusChange);
+
     _mobileFocusNode.dispose();
+    _mobileSearchController.dispose();
+
     super.dispose();
+  }
+
+  void _handleMobileSearchChanged(
+    String value,
+  ) {
+    setState(() {
+      _currentQuery = value;
+    });
+
+    context
+        .read<ProductProvider>()
+        .filterProducts(value);
+
+    widget.onChanged?.call(value);
+
+    if (value.trim().isEmpty) {
+      _removeMobileOverlay();
+      return;
+    }
+
+    if (_mobileOverlayEntry == null) {
+      _showMobileOverlay();
+    } else {
+      _mobileOverlayEntry?.markNeedsBuild();
+    }
+  }
+void _submitMobileSearch(String value) {
+  final query = value.trim();
+
+  if (query.isEmpty) {
+    return;
+  }
+
+  context
+      .read<ProductProvider>()
+      .filterProducts(query);
+
+  _removeMobileOverlay();
+
+  widget.onSubmitted?.call(query);
+}
+
+  void _clearMobileSearch() {
+    if (_mobileSearchController.text.isEmpty &&
+        _currentQuery.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _currentQuery = '';
+    });
+
+    _mobileSearchController.clear();
+
+    context
+        .read<ProductProvider>()
+        .clearSearch();
+
+    widget.onChanged?.call('');
   }
 
   @override
@@ -701,27 +229,42 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
     return Container(
       height: 76,
       color: const Color(0xFF02060D),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 6,
+      ),
       child: SafeArea(
         bottom: false,
         child: Row(
           children: [
-            _mobileLogo(context),
+            _buildMobileLogo(context),
             const SizedBox(width: 8),
-            Expanded(child: _mobileSearchInput()),
+            Expanded(
+              child: _buildMobileSearchInput(),
+            ),
             const SizedBox(width: 8),
             const UserDropdownMenu(),
             const SizedBox(width: 6),
-            _mobileCartIcon(context),
+            _buildMobileCartIcon(context),
           ],
         ),
       ),
     );
   }
 
-  Widget _mobileLogo(BuildContext context) {
+  Widget _buildMobileLogo(
+    BuildContext context,
+  ) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/home'),
+      onTap: () {
+        _removeMobileOverlay();
+        _clearMobileSearch();
+
+        Navigator.pushNamed(
+          context,
+          '/home',
+        );
+      },
       child: Container(
         width: 48,
         height: 48,
@@ -729,9 +272,9 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF58C2FF).withOpacity(.55),
+              color: const Color(0xFF58C2FF)
+                  .withOpacity(.55),
               blurRadius: 10,
-              spreadRadius: 0,
             ),
           ],
         ),
@@ -739,13 +282,23 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
           child: Image.asset(
             'assets/UDElectronics.com.png',
             fit: BoxFit.cover,
+            errorBuilder: (
+              context,
+              error,
+              stackTrace,
+            ) {
+              return const Icon(
+                Icons.flash_on,
+                color: Colors.blue,
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _mobileSearchInput() {
+  Widget _buildMobileSearchInput() {
     return Container(
       height: 36,
       decoration: BoxDecoration(
@@ -759,18 +312,32 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
       child: Row(
         children: [
           const SizedBox(width: 10),
-          const Icon(Icons.search, color: Color(0xFFB8C2D4), size: 18),
+          const Icon(
+            Icons.search,
+            color: Color(0xFFB8C2D4),
+            size: 18,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: TextField(
+              controller:
+                  _mobileSearchController,
               focusNode: _mobileFocusNode,
-              onChanged: widget.onChanged,
-              onSubmitted: widget.onSubmitted,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
+              onChanged:
+                  _handleMobileSearchChanged,
+              onSubmitted:
+                  _submitMobileSearch,
+              textInputAction:
+                  TextInputAction.search,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+              ),
               decoration: InputDecoration(
                 hintText: widget.hintText,
                 hintStyle: const TextStyle(
-                  color: Color(0xFFB8C2D4),
+                  color:
+                      Color(0xFFB8C2D4),
                   fontSize: 13,
                 ),
                 border: InputBorder.none,
@@ -778,17 +345,48 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
               ),
             ),
           ),
+          if (_currentQuery.isNotEmpty)
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints:
+                  const BoxConstraints(
+                minWidth: 34,
+                minHeight: 34,
+              ),
+              onPressed: () {
+                _removeMobileOverlay();
+                _clearMobileSearch();
+
+                _mobileFocusNode.requestFocus();
+              },
+              icon: const Icon(
+                Icons.close,
+                color: Colors.white70,
+                size: 17,
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _mobileCartIcon(BuildContext context) {
-    final cartProvider = Provider.of<CartProvider>(context);
-    final itemCount = cartProvider.totalItems;
+  Widget _buildMobileCartIcon(
+    BuildContext context,
+  ) {
+    final itemCount = context
+        .watch<CartProvider>()
+        .totalItems;
 
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/cesta'),
+      onTap: () {
+        _removeMobileOverlay();
+        _clearMobileSearch();
+
+        Navigator.pushNamed(
+          context,
+          '/cesta',
+        );
+      },
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -800,11 +398,194 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
           Positioned(
             right: -7,
             top: -8,
-            child: _cartBadge(itemCount, fontSize: 9, padding: 4),
+            child: _cartBadge(
+              itemCount,
+              fontSize: 9,
+              padding: 4,
+            ),
           ),
         ],
       ),
     );
+  }
+
+  void _showMobileOverlay() {
+    if (_mobileOverlayEntry != null) {
+      return;
+    }
+
+    if (_currentQuery.trim().isEmpty) {
+      return;
+    }
+
+    final renderObject =
+        context.findRenderObject();
+
+    if (renderObject is! RenderBox) {
+      return;
+    }
+
+    final size = renderObject.size;
+
+    final offset =
+        renderObject.localToGlobal(
+      Offset.zero,
+    );
+
+    _mobileOverlayEntry = OverlayEntry(
+      builder: (overlayContext) {
+        return Positioned(
+          left: 10,
+          right: 10,
+          top: offset.dy +
+              size.height +
+              4,
+          child: Material(
+            color: Colors.transparent,
+            elevation: 12,
+            borderRadius:
+                BorderRadius.circular(14),
+            child: Container(
+              constraints:
+                  const BoxConstraints(
+                maxHeight: 310,
+              ),
+              decoration: BoxDecoration(
+                color:
+                    const Color(0xFF07111F),
+                borderRadius:
+                    BorderRadius.circular(
+                  14,
+                ),
+                border: Border.all(
+                  color:
+                      const Color(0xFF1B3248),
+                ),
+              ),
+              child:
+                  Consumer<ProductProvider>(
+                builder: (
+                  context,
+                  provider,
+                  child,
+                ) {
+                  if (_currentQuery
+                      .trim()
+                      .isEmpty) {
+                    return const SizedBox
+                        .shrink();
+                  }
+
+                  final products =
+                      provider.filteredProducts;
+
+                  if (provider.isLoading) {
+                    return const Padding(
+                      padding:
+                          EdgeInsets.all(20),
+                      child: Center(
+                        child:
+                            CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  if (products.isEmpty) {
+                    return const Padding(
+                      padding:
+                          EdgeInsets.all(16),
+                      child: Text(
+                        'No se encontraron productos.',
+                        style: TextStyle(
+                          color: Colors.white70,
+                        ),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    padding:
+                        const EdgeInsets.symmetric(
+                      vertical: 8,
+                    ),
+                    itemCount: products.length,
+                    itemBuilder: (
+                      context,
+                      index,
+                    ) {
+                      final product =
+                          products[index];
+
+                      return ListTile(
+                        leading: _productImage(
+                          product.images,
+                          size: 42,
+                        ),
+                        title: Text(
+                          product.name,
+                          maxLines: 2,
+                          overflow:
+                              TextOverflow.ellipsis,
+                          style:
+                              const TextStyle(
+                            color:
+                                Colors.white,
+                            fontSize: 13,
+                            fontWeight:
+                                FontWeight.w600,
+                          ),
+                        ),
+                        onTap: () {
+                          _openMobileProduct(
+                            product,
+                          );
+                        },
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
+
+    Overlay.of(context).insert(
+      _mobileOverlayEntry!,
+    );
+  }
+
+  void _openMobileProduct(
+    Product product,
+  ) {
+    final targetRoute =
+        product.slug.trim().isNotEmpty
+            ? '/${product.slug}'
+            : '/${_generateSlug(product.name)}';
+
+    _removeMobileOverlay();
+
+    setState(() {
+      _currentQuery = '';
+    });
+
+    _mobileSearchController.clear();
+
+    context
+        .read<ProductProvider>()
+        .clearSearch();
+
+    _mobileFocusNode.unfocus();
+
+    navigatorKey.currentState
+        ?.pushNamed(targetRoute);
+  }
+
+  void _removeMobileOverlay() {
+    _mobileOverlayEntry?.remove();
+    _mobileOverlayEntry = null;
   }
 }
 
@@ -812,73 +593,214 @@ class _MobileSearchBarState extends State<MobileSearchBar> {
 /// ESCRITORIO
 /// ============================================================================
 
-class SearchBarDesktop extends StatefulWidget implements PreferredSizeWidget {
+class SearchBarDesktop
+    extends StatefulWidget
+    implements PreferredSizeWidget {
   final String hintText;
+  final String initialQuery;
   final ValueChanged<String>? onChanged;
   final ValueChanged<String>? onSubmitted;
 
   const SearchBarDesktop({
-    Key? key,
-    this.hintText = 'Buscar productos, Marca y más...',
+    super.key,
+    this.hintText =
+        'Buscar productos, marca y más...',
+    this.initialQuery = '',
     this.onChanged,
     this.onSubmitted,
-  }) : super(key: key);
+  });
 
   @override
-  State<SearchBarDesktop> createState() => _SearchBarDesktopState();
+  State<SearchBarDesktop> createState() =>
+      _SearchBarDesktopState();
 
   @override
-  Size get preferredSize => const Size.fromHeight(78);
+  Size get preferredSize =>
+      const Size.fromHeight(78);
 }
 
-class _SearchBarDesktopState extends State<SearchBarDesktop> {
-  final FocusNode _focusNode = FocusNode();
-  final GlobalKey _textFieldKey = GlobalKey();
+class _SearchBarDesktopState
+    extends State<SearchBarDesktop> {
+  final FocusNode _focusNode =
+      FocusNode();
+
+  final TextEditingController _searchController =
+      TextEditingController();
+
+  final GlobalKey _textFieldKey =
+      GlobalKey();
 
   OverlayEntry? _overlayEntry;
+
   bool _hoveringOverlay = false;
+  String _currentQuery = '';
 
   @override
   void initState() {
     super.initState();
 
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus) {
-        _showOverlay();
-      } else {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (!mounted) return;
-          if (!_hoveringOverlay) _removeOverlay();
-        });
+    _currentQuery = widget.initialQuery;
+
+    _searchController.text =
+        widget.initialQuery;
+
+    _searchController.selection =
+        TextSelection.collapsed(
+      offset: _searchController.text.length,
+    );
+
+    _focusNode.addListener(
+      _handleDesktopFocusChange,
+    );
+  }
+
+  @override
+  void didUpdateWidget(
+    covariant SearchBarDesktop oldWidget,
+  ) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.initialQuery !=
+        widget.initialQuery) {
+      _currentQuery = widget.initialQuery;
+
+      _searchController.text =
+          widget.initialQuery;
+
+      _searchController.selection =
+          TextSelection.collapsed(
+        offset: _searchController.text.length,
+      );
+
+      if (mounted) {
+        setState(() {});
       }
-    });
+    }
+  }
+
+  void _handleDesktopFocusChange() {
+    if (_focusNode.hasFocus) {
+      if (_currentQuery.trim().isNotEmpty) {
+        _showOverlay();
+      }
+
+      return;
+    }
+
+    Future.delayed(
+      const Duration(milliseconds: 180),
+      () {
+        if (!mounted) return;
+
+        if (!_hoveringOverlay) {
+          _removeOverlay();
+        }
+      },
+    );
   }
 
   @override
   void dispose() {
     _removeOverlay();
+
+    _focusNode
+        .removeListener(_handleDesktopFocusChange);
+
     _focusNode.dispose();
+    _searchController.dispose();
+
     super.dispose();
+  }
+
+  void _handleDesktopSearchChanged(
+    String value,
+  ) {
+    setState(() {
+      _currentQuery = value;
+    });
+
+    context
+        .read<ProductProvider>()
+        .filterProducts(value);
+
+    widget.onChanged?.call(value);
+
+    if (value.trim().isEmpty) {
+      _removeOverlay();
+      return;
+    }
+
+    if (_overlayEntry == null) {
+      _showOverlay();
+    } else {
+      _overlayEntry?.markNeedsBuild();
+    }
+  }
+
+  void _submitDesktopSearch(String value) {
+  final query = value.trim();
+
+  if (query.isEmpty) {
+    return;
+  }
+
+  // Deja en el provider únicamente los resultados globales.
+  context
+      .read<ProductProvider>()
+      .filterProducts(query);
+
+  _removeOverlay();
+
+  // HomeScreen decidirá navegar.
+  // ProductInfoScreen actualizará su propia lista.
+  widget.onSubmitted?.call(query);
+}
+
+  void _clearDesktopSearch() {
+    if (_searchController.text.isEmpty &&
+        _currentQuery.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _currentQuery = '';
+    });
+
+    _searchController.clear();
+
+    context
+        .read<ProductProvider>()
+        .clearSearch();
+
+    widget.onChanged?.call('');
   }
 
   @override
   Widget build(BuildContext context) {
-    final productProvider = Provider.of<ProductProvider>(context);
-    final cartProvider = Provider.of<CartProvider>(context);
-    final itemCount = cartProvider.totalItems;
+    final itemCount = context
+        .watch<CartProvider>()
+        .totalItems;
 
     return Container(
       height: 78,
       color: const Color(0xFF02060D),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 6,
+      ),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 22,
+        ),
         decoration: BoxDecoration(
-          color: const Color(0xFF07111F).withOpacity(0.94),
-          borderRadius: BorderRadius.circular(14),
+          color: const Color(0xFF07111F)
+              .withOpacity(0.94),
+          borderRadius:
+              BorderRadius.circular(14),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF008CFF).withOpacity(0.13),
+              color: const Color(0xFF008CFF)
+                  .withOpacity(0.13),
               blurRadius: 22,
               offset: const Offset(0, 6),
             ),
@@ -886,28 +808,32 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
         ),
         child: Row(
           children: [
-            _brandLogo(context),
+            _buildBrandLogo(context),
             const SizedBox(width: 24),
-
             Expanded(
               child: Center(
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 760),
-                  child: _searchInput(productProvider),
+                  constraints:
+                      const BoxConstraints(
+                    maxWidth: 760,
+                  ),
+                  child:
+                      _buildDesktopSearchInput(),
                 ),
               ),
             ),
-
             const SizedBox(width: 24),
-            _cartButton(context, itemCount),
+            _buildCartButton(
+              context,
+              itemCount,
+            ),
             const SizedBox(width: 20),
-
             Container(
               height: 38,
               width: 1,
-              color: const Color(0xFF253449),
+              color:
+                  const Color(0xFF253449),
             ),
-
             const SizedBox(width: 20),
             const UserDropdownMenu(),
           ],
@@ -916,9 +842,19 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
     );
   }
 
-  Widget _brandLogo(BuildContext context) {
+  Widget _buildBrandLogo(
+    BuildContext context,
+  ) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/home'),
+      onTap: () {
+        _removeOverlay();
+        _clearDesktopSearch();
+
+        Navigator.pushNamed(
+          context,
+          '/home',
+        );
+      },
       child: Container(
         width: 70,
         height: 70,
@@ -926,9 +862,9 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4DB6FF).withOpacity(0.72),
+              color: const Color(0xFF4DB6FF)
+                  .withOpacity(0.72),
               blurRadius: 12,
-              spreadRadius: 0,
             ),
           ],
         ),
@@ -936,25 +872,37 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
           child: Image.asset(
             'assets/UDElectronics.com.png',
             fit: BoxFit.cover,
+            errorBuilder: (
+              context,
+              error,
+              stackTrace,
+            ) {
+              return const Icon(
+                Icons.flash_on,
+                color: Colors.blue,
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _searchInput(ProductProvider productProvider) {
+  Widget _buildDesktopSearchInput() {
     return Container(
       height: 44,
       decoration: BoxDecoration(
         color: const Color(0xFF050A13),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius:
+            BorderRadius.circular(12),
         border: Border.all(
           color: const Color(0xFF007BFF),
           width: 1.1,
         ),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF007BFF).withOpacity(0.16),
+            color: const Color(0xFF007BFF)
+                .withOpacity(0.16),
             blurRadius: 10,
           ),
         ],
@@ -971,20 +919,25 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
           Expanded(
             child: TextField(
               key: _textFieldKey,
+              controller:
+                  _searchController,
               focusNode: _focusNode,
-              onChanged: (value) {
-                productProvider.filterProducts(value);
-                setState(() {});
-              },
-              onSubmitted: widget.onSubmitted,
+              onChanged:
+                  _handleDesktopSearchChanged,
+              onSubmitted:
+                  _submitDesktopSearch,
+              textInputAction:
+                  TextInputAction.search,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 15.5,
               ),
-              decoration: const InputDecoration(
-                hintText: 'Buscar productos, Marca y más...',
-                hintStyle: TextStyle(
-                  color: Color(0xFFB8C2D4),
+              decoration: InputDecoration(
+                hintText: widget.hintText,
+                hintStyle:
+                    const TextStyle(
+                  color:
+                      Color(0xFFB8C2D4),
                   fontSize: 15.5,
                 ),
                 border: InputBorder.none,
@@ -992,14 +945,42 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
               ),
             ),
           ),
+          if (_currentQuery.isNotEmpty)
+            IconButton(
+              onPressed: () {
+                _removeOverlay();
+                _clearDesktopSearch();
+
+                _focusNode.requestFocus();
+              },
+              icon: const Icon(
+                Icons.close,
+                color: Colors.white70,
+                size: 18,
+              ),
+              tooltip:
+                  'Limpiar búsqueda',
+            ),
+          const SizedBox(width: 4),
         ],
       ),
     );
   }
 
-  Widget _cartButton(BuildContext context, int itemCount) {
+  Widget _buildCartButton(
+    BuildContext context,
+    int itemCount,
+  ) {
     return GestureDetector(
-      onTap: () => Navigator.pushNamed(context, '/cesta'),
+      onTap: () {
+        _removeOverlay();
+        _clearDesktopSearch();
+
+        Navigator.pushNamed(
+          context,
+          '/cesta',
+        );
+      },
       child: Stack(
         clipBehavior: Clip.none,
         children: [
@@ -1011,7 +992,11 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
           Positioned(
             right: -7,
             top: -8,
-            child: _cartBadge(itemCount, fontSize: 9, padding: 4),
+            child: _cartBadge(
+              itemCount,
+              fontSize: 9,
+              padding: 4,
+            ),
           ),
         ],
       ),
@@ -1019,173 +1004,379 @@ class _SearchBarDesktopState extends State<SearchBarDesktop> {
   }
 
   void _showOverlay() {
-    if (_overlayEntry != null) return;
-    if (_textFieldKey.currentContext == null) return;
+    if (_overlayEntry != null) {
+      return;
+    }
 
-    final renderBox =
-        _textFieldKey.currentContext!.findRenderObject() as RenderBox;
+    if (_currentQuery.trim().isEmpty) {
+      return;
+    }
 
-    final size = renderBox.size;
-    final offset = renderBox.localToGlobal(Offset.zero);
+    final fieldContext =
+        _textFieldKey.currentContext;
+
+    if (fieldContext == null) {
+      return;
+    }
+
+    final renderObject =
+        fieldContext.findRenderObject();
+
+    if (renderObject is! RenderBox) {
+      return;
+    }
+
+    final size = renderObject.size;
+
+    final offset =
+        renderObject.localToGlobal(
+      Offset.zero,
+    );
 
     int hoverIndex = -1;
 
     _overlayEntry = OverlayEntry(
-      builder: (_) => Positioned(
-        left: offset.dx,
-        top: offset.dy + size.height + 8,
-        width: size.width,
-        child: MouseRegion(
-          onEnter: (_) => _hoveringOverlay = true,
-          onExit: (_) => _hoveringOverlay = false,
-          child: Material(
-            color: Colors.transparent,
-            elevation: 12,
-            borderRadius: BorderRadius.circular(14),
-            child: StatefulBuilder(
-              builder: (context, setOverlayState) {
-                return Container(
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF07111F),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: const Color(0xFF1B3248),
-                      width: 1,
+      builder: (overlayContext) {
+        return Positioned(
+          left: offset.dx,
+          top: offset.dy +
+              size.height +
+              8,
+          width: size.width,
+          child: MouseRegion(
+            onEnter: (_) {
+              _hoveringOverlay = true;
+            },
+            onExit: (_) {
+              _hoveringOverlay = false;
+            },
+            child: Material(
+              color: Colors.transparent,
+              elevation: 12,
+              borderRadius:
+                  BorderRadius.circular(14),
+              child: StatefulBuilder(
+                builder: (
+                  context,
+                  setOverlayState,
+                ) {
+                  return Container(
+                    constraints:
+                        const BoxConstraints(
+                      maxHeight: 300,
                     ),
-                  ),
-                  child: Consumer<ProductProvider>(
-                    builder: (context, provider, _) {
-                      final products = provider.filteredProducts;
+                    decoration:
+                        BoxDecoration(
+                      color: const Color(
+                        0xFF07111F,
+                      ),
+                      borderRadius:
+                          BorderRadius.circular(
+                        14,
+                      ),
+                      border: Border.all(
+                        color: const Color(
+                          0xFF1B3248,
+                        ),
+                      ),
+                    ),
+                    child: Consumer<
+                        ProductProvider>(
+                      builder: (
+                        context,
+                        provider,
+                        child,
+                      ) {
+                        if (_currentQuery
+                            .trim()
+                            .isEmpty) {
+                          return const SizedBox
+                              .shrink();
+                        }
 
-                      if (products.isEmpty) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text(
-                            'No se encontraron productos.',
-                            style: TextStyle(color: Colors.white70),
-                          ),
-                        );
-                      }
+                        if (provider.isLoading) {
+                          return const Padding(
+                            padding:
+                                EdgeInsets.all(
+                              20,
+                            ),
+                            child: Center(
+                              child:
+                                  CircularProgressIndicator(),
+                            ),
+                          );
+                        }
 
-                      return ListView.builder(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: products.length,
-                        itemBuilder: (context, index) {
-                          final product = products[index];
-                          final isHover = hoverIndex == index;
+                        final products =
+                            provider
+                                .filteredProducts;
 
-                          return MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            onEnter: (_) {
-                              setOverlayState(() => hoverIndex = index);
-                            },
-                            onExit: (_) {
-                              setOverlayState(() => hoverIndex = -1);
-                            },
-                            child: InkWell(
-                              onTap: () {
-                                _removeOverlay();
-                                _focusNode.unfocus();
-
-                                WidgetsBinding.instance.addPostFrameCallback((_) {
-                                  final targetRoute = product.slug.isNotEmpty
-                                      ? '/${product.slug}'
-                                      : '/${product.name.toLowerCase().trim().replaceAll(' ', '-')}';
-
-                                  navigatorKey.currentState
-                                      ?.pushNamed(targetRoute);
-                                });
-                              },
-                              borderRadius: BorderRadius.circular(12),
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 130),
-                                padding: const EdgeInsets.all(10),
-                                margin: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: isHover
-                                      ? const Color(0xFF10233B)
-                                      : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isHover
-                                        ? const Color(0xFF168CFF)
-                                        : Colors.transparent,
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: product.images.isNotEmpty
-                                          ? Image.network(
-                                              Uri.encodeFull(
-                                                product.images.first,
-                                              ),
-                                              width: 46,
-                                              height: 46,
-                                              fit: BoxFit.cover,
-                                            )
-                                          : Container(
-                                              width: 46,
-                                              height: 46,
-                                              color: const Color(0xFF253449),
-                                              child: const Icon(
-                                                Icons.image,
-                                                color: Colors.white54,
-                                                size: 22,
-                                              ),
-                                            ),
-                                    ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Text(
-                                        product.name,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 14,
-                                          fontWeight: isHover
-                                              ? FontWeight.w700
-                                              : FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                    if (isHover)
-                                      const Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 14,
-                                        color: Color(0xFF168CFF),
-                                      ),
-                                  ],
-                                ),
+                        if (products.isEmpty) {
+                          return const Padding(
+                            padding:
+                                EdgeInsets.all(
+                              16,
+                            ),
+                            child: Text(
+                              'No se encontraron productos.',
+                              style:
+                                  TextStyle(
+                                color:
+                                    Colors.white70,
                               ),
                             ),
                           );
-                        },
-                      );
-                    },
-                  ),
-                );
-              },
+                        }
+
+                        return ListView.builder(
+                          padding:
+                              const EdgeInsets.symmetric(
+                            vertical: 8,
+                          ),
+                          itemCount:
+                              products.length,
+                          itemBuilder: (
+                            context,
+                            index,
+                          ) {
+                            final product =
+                                products[index];
+
+                            final isHover =
+                                hoverIndex ==
+                                    index;
+
+                            return MouseRegion(
+                              cursor:
+                                  SystemMouseCursors
+                                      .click,
+                              onEnter: (_) {
+                                setOverlayState(
+                                  () {
+                                    hoverIndex =
+                                        index;
+                                  },
+                                );
+                              },
+                              onExit: (_) {
+                                setOverlayState(
+                                  () {
+                                    hoverIndex =
+                                        -1;
+                                  },
+                                );
+                              },
+                              child: InkWell(
+                                onTap: () {
+                                  _openDesktopProduct(
+                                    product,
+                                  );
+                                },
+                                borderRadius:
+                                    BorderRadius.circular(
+                                  12,
+                                ),
+                                child:
+                                    AnimatedContainer(
+                                  duration:
+                                      const Duration(
+                                    milliseconds:
+                                        130,
+                                  ),
+                                  padding:
+                                      const EdgeInsets.all(
+                                    10,
+                                  ),
+                                  margin:
+                                      const EdgeInsets.symmetric(
+                                    horizontal:
+                                        8,
+                                    vertical: 4,
+                                  ),
+                                  decoration:
+                                      BoxDecoration(
+                                    color: isHover
+                                        ? const Color(
+                                            0xFF10233B,
+                                          )
+                                        : Colors
+                                            .transparent,
+                                    borderRadius:
+                                        BorderRadius.circular(
+                                      12,
+                                    ),
+                                    border:
+                                        Border.all(
+                                      color: isHover
+                                          ? const Color(
+                                              0xFF168CFF,
+                                            )
+                                          : Colors
+                                              .transparent,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      _productImage(
+                                        product.images,
+                                        size: 46,
+                                      ),
+                                      const SizedBox(
+                                        width: 10,
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          product.name,
+                                          maxLines: 2,
+                                          overflow:
+                                              TextOverflow.ellipsis,
+                                          style:
+                                              TextStyle(
+                                            color:
+                                                Colors.white,
+                                            fontSize:
+                                                14,
+                                            fontWeight: isHover
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                          ),
+                                        ),
+                                      ),
+                                      if (isHover)
+                                        const Icon(
+                                          Icons
+                                              .arrow_forward_ios,
+                                          size: 14,
+                                          color:
+                                              Color(
+                                            0xFF168CFF,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
 
-    Overlay.of(context).insert(_overlayEntry!);
+    Overlay.of(context).insert(
+      _overlayEntry!,
+    );
+  }
+
+  void _openDesktopProduct(
+    Product product,
+  ) {
+    final targetRoute =
+        product.slug.trim().isNotEmpty
+            ? '/${product.slug}'
+            : '/${_generateSlug(product.name)}';
+
+    _removeOverlay();
+
+    setState(() {
+      _currentQuery = '';
+    });
+
+    _searchController.clear();
+
+    context
+        .read<ProductProvider>()
+        .clearSearch();
+
+    _focusNode.unfocus();
+
+    navigatorKey.currentState
+        ?.pushNamed(targetRoute);
   }
 
   void _removeOverlay() {
     _overlayEntry?.remove();
     _overlayEntry = null;
   }
+}
+
+/// ============================================================================
+/// HELPERS
+/// ============================================================================
+
+Widget _productImage(
+  List<String> images, {
+  required double size,
+}) {
+  if (images.isEmpty) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        color: const Color(0xFF253449),
+        borderRadius:
+            BorderRadius.circular(8),
+      ),
+      child: const Icon(
+        Icons.image_outlined,
+        color: Colors.white54,
+      ),
+    );
+  }
+
+  return ClipRRect(
+    borderRadius:
+        BorderRadius.circular(8),
+    child: Image.network(
+      images.first,
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      errorBuilder: (
+        context,
+        error,
+        stackTrace,
+      ) {
+        return Container(
+          width: size,
+          height: size,
+          color:
+              const Color(0xFF253449),
+          child: const Icon(
+            Icons.broken_image_outlined,
+            color: Colors.white54,
+          ),
+        );
+      },
+    ),
+  );
+}
+
+String _generateSlug(
+  String value,
+) {
+  return value
+      .trim()
+      .toLowerCase()
+      .replaceAll(
+        RegExp(r'[^\w\s-]'),
+        '',
+      )
+      .replaceAll(
+        RegExp(r'\s+'),
+        '-',
+      )
+      .replaceAll(
+        RegExp(r'-+'),
+        '-',
+      );
 }
 
 Widget _cartBadge(
@@ -1199,7 +1390,8 @@ Widget _cartBadge(
       color: Color(0xFF168CFF),
       shape: BoxShape.circle,
     ),
-    constraints: const BoxConstraints(
+    constraints:
+        const BoxConstraints(
       minWidth: 15,
       minHeight: 15,
     ),

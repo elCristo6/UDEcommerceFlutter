@@ -14,6 +14,51 @@ class ProductService {
 // Para lectura de imágenes (mostrar en la UI)
   static const String imageUrl = ApiConfig.baseUrl;
 
+  Future<List<Product>> getProductsByCategory(
+  String categoryId,
+) async {
+  final uri = Uri.parse(
+    '$backendUrl/products/by-category/$categoryId',
+  );
+
+  final response = await http.get(uri);
+
+  if (response.statusCode < 200 ||
+      response.statusCode >= 300) {
+    throw Exception(
+      'Error al obtener productos por categoría: '
+      '${response.statusCode}',
+    );
+  }
+
+  final decoded = jsonDecode(response.body);
+
+  if (decoded is! Map<String, dynamic>) {
+    throw Exception(
+      'Respuesta inválida al filtrar por categoría',
+    );
+  }
+
+  if (decoded['success'] != true) {
+    throw Exception(
+      decoded['message']?.toString() ??
+          decoded['error']?.toString() ??
+          'No fue posible filtrar los productos',
+    );
+  }
+
+  final data = decoded['data'];
+
+  if (data is! List) {
+    return [];
+  }
+
+  return data
+      .whereType<Map<String, dynamic>>()
+      .map(Product.fromJson)
+      .toList();
+}
+
   /// Sube N imágenes en un solo PUT /products/:id y devuelve la lista completa de URLs.
   Future<List<String>> uploadProductImagesBatch(
     String productId,
@@ -106,24 +151,96 @@ class ProductService {
       throw Exception(responseData['message'] ?? 'Failed to load product');
     }
   }
+  Future<Product> updateProduct(
+  Product product, {
+  List<Uint8List> newImages = const [],
+}) async {
+  final uri = Uri.parse(
+    '$backendUrl/products/${product.id}',
+  );
 
-  Future<Product> updateProduct(Product product) async {
-    final response = await http.put(
-      Uri.parse('$backendUrl/products/${product.id}'),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode(product.toJson()),
+  final request =
+      http.MultipartRequest('PUT', uri);
+
+  request.fields['name'] = product.name;
+  request.fields['price'] =
+      product.price.toString();
+  request.fields['description'] =
+      product.description;
+  request.fields['stock'] =
+      product.stock.toString();
+  request.fields['box'] =
+      product.box.join(',');
+  request.fields['category'] =
+      product.category;
+  request.fields['categories'] =
+      product.categories.join(',');
+
+  final timestamp =
+      DateTime.now().millisecondsSinceEpoch;
+
+  for (int index = 0;
+      index < newImages.length;
+      index++) {
+    request.files.add(
+      http.MultipartFile.fromBytes(
+        'images',
+        newImages[index],
+        filename:
+            'product_${timestamp}_$index.png',
+        contentType:
+            MediaType('image', 'png'),
+      ),
     );
-
-    if (response.statusCode == 200) {
-      return Product.fromJson(jsonDecode(response.body));
-    } else {
-      final responseData = jsonDecode(response.body);
-      throw Exception(responseData['message'] ?? 'Failed to update product');
-    }
   }
 
+  final streamedResponse =
+      await request.send();
+
+  final response =
+      await http.Response.fromStream(
+    streamedResponse,
+  );
+
+  if (response.statusCode >= 200 &&
+      response.statusCode < 300) {
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception(
+        'Respuesta inválida del servidor',
+      );
+    }
+
+    final productData =
+        decoded['data'] is Map<String, dynamic>
+            ? decoded['data']
+                as Map<String, dynamic>
+            : decoded;
+
+    return Product.fromJson(productData);
+  }
+
+  String message =
+      'Error al actualizar producto';
+
+  try {
+    final decoded = jsonDecode(response.body);
+
+    if (decoded is Map<String, dynamic>) {
+      message =
+          decoded['message']?.toString() ??
+              decoded['error']?.toString() ??
+              message;
+    }
+  } catch (_) {
+    message =
+        'HTTP ${response.statusCode}: '
+        '${response.body}';
+  }
+
+  throw Exception(message);
+}
   Future<void> deleteProduct(String id) async {
     final response = await http.delete(Uri.parse('$backendUrl/products/$id'));
 

@@ -26,7 +26,11 @@ class ProductProvider with ChangeNotifier {
       {}; // 🔹 Mapa para controladores
 
   List<Product> _filteredProducts = [];
+  List<Product> _categoryProducts = [];
+  List<Product> get categoryProducts => _categoryProducts;
   bool _isLoading = false;
+  String? _productsError;
+  String? get productsError => _productsError;
   bool _isFiltering = false;
   bool _hasFetchedProducts = false;
   final ProductService _service = ProductService();
@@ -78,7 +82,80 @@ class ProductProvider with ChangeNotifier {
 
   ProductPdpData? get currentPdpProduct => _currentPdpProduct;
   bool get isLoadingPdp => _isLoadingPdp;
+  String? _selectedCategoryId;
+String? _selectedCategoryName;
+bool _isLoadingCategory = false;
+String? _categoryFilterError;
 
+String? get selectedCategoryId =>
+    _selectedCategoryId;
+
+String? get selectedCategoryName =>
+    _selectedCategoryName;
+
+bool get isLoadingCategory =>
+    _isLoadingCategory;
+
+String? get categoryFilterError =>
+    _categoryFilterError;
+
+bool get isFilteringByCategory =>
+    _selectedCategoryId != null;
+
+Future<void> filterProductsByCategory({
+  required String categoryId,
+  required String categoryName,
+}) async {
+  if (categoryId.trim().isEmpty) return;
+
+  _selectedCategoryId = categoryId;
+  _selectedCategoryName = categoryName;
+  _isLoadingCategory = true;
+  _categoryFilterError = null;
+  _isFiltering = true;
+
+  notifyListeners();
+
+  try {
+    final products =
+        await _productService.getProductsByCategory(
+      categoryId,
+    );
+
+    _categoryProducts = List<Product>.from(products);
+    _filteredProducts = List<Product>.from(products);
+  } catch (error, stackTrace) {
+    _categoryFilterError = error.toString();
+    _categoryProducts = [];
+    _filteredProducts = [];
+
+    debugPrint(
+      'Error filtrando productos por categoría: $error',
+    );
+
+    debugPrintStack(
+      stackTrace: stackTrace,
+    );
+  } finally {
+    _isLoadingCategory = false;
+    notifyListeners();
+  }
+}
+
+void clearCategoryFilter() {
+  _selectedCategoryId = null;
+  _selectedCategoryName = null;
+  _categoryFilterError = null;
+  _isLoadingCategory = false;
+
+  _categoryProducts = [];
+
+  _isFiltering = false;
+  _filteredProducts =
+      List<Product>.from(_products);
+
+  notifyListeners();
+}
   // Método reactivo para solicitar los datos CRO del backend antes de pintar el UI
   Future<void> fetchProductDetailBySlug(String slug) async {
     _isLoadingPdp = true;
@@ -168,58 +245,101 @@ class ProductProvider with ChangeNotifier {
   void clearControllers() {
     _priceControllers.clear(); //  Limpia los controladores cuando sea necesario
   }
+Future<void> fetchProducts({
+  bool forceUpdate = false,
+}) async {
+  if (_isLoading) return;
 
-  Future<void> fetchProducts({bool forceUpdate = false}) async {
-    if (_isLoading || (_hasFetchedProducts && !forceUpdate)) return;
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      List<Product> newProducts = await _productService.getProducts();
-      _products = newProducts;
-
-      // Actualiza la lista filtrada con los productos nuevos
-      _filteredProducts = _products;
-      _hasFetchedProducts = true;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+  if (_hasFetchedProducts &&
+      !forceUpdate &&
+      _products.isNotEmpty) {
+    return;
   }
 
-  void filterProducts(String query) {
-    if (query.isEmpty) {
-      _isFiltering = false;
-      _filteredProducts = _products;
-    } else {
-      _isFiltering = true; // Activa el estado de filtro
-      _filteredProducts = _products
-          .where((product) =>
-              product.name.toLowerCase().contains(query.toLowerCase()))
-          .toList();
+  _isLoading = true;
+  _productsError = null;
+  notifyListeners();
+
+  try {
+    final newProducts =
+        await _productService.getProducts();
+
+    _products =
+        List<Product>.from(newProducts);
+
+    _filteredProducts =
+        List<Product>.from(newProducts);
+
+    _hasFetchedProducts = true;
+  } catch (error, stackTrace) {
+    _productsError = error.toString();
+
+    debugPrint(
+      'Error cargando productos: $error',
+    );
+
+    debugPrintStack(
+      stackTrace: stackTrace,
+    );
+
+    if (_products.isEmpty) {
+      _hasFetchedProducts = false;
     }
-    notifyListeners();
-  }
-
-  void addToCart(Product product) {
-    int index = _cart.indexWhere((p) => p.id == product.id);
-
-    if (index != -1) {
-      // Si el producto ya está en el carrito, solo aumenta la cantidad
-      _quantities[product] = (_quantities[product] ?? 1) + 1;
-    } else {
-      // Si no está en el carrito, lo agrega con cantidad 1
-      _cart.add(product);
-      _quantities[product] = 1;
-    }
-    notifyListeners(); // Notifica a la UI que hubo cambios
-  }
-
-  void clearFilter() {
-    _isFiltering = false; // Limpia el estado de filtro
-    _filteredProducts = _products; // Restaura la lista completa
+  } finally {
+    _isLoading = false;
     notifyListeners();
   }
+}
+
+void filterProducts(String query) {
+  final normalizedQuery = query.trim().toLowerCase();
+
+  // La búsqueda global elimina cualquier filtro de categoría activo.
+  _selectedCategoryId = null;
+  _selectedCategoryName = null;
+  _categoryFilterError = null;
+  _categoryProducts = [];
+
+  if (normalizedQuery.isEmpty) {
+    _isFiltering = false;
+    _filteredProducts = List<Product>.from(_products);
+    notifyListeners();
+    return;
+  }
+
+  _isFiltering = true;
+
+  _filteredProducts = _products.where((product) {
+    final name = product.name.trim().toLowerCase();
+    final description =
+        product.description.trim().toLowerCase();
+    final legacyCategory =
+        product.category.trim().toLowerCase();
+
+    return name.contains(normalizedQuery) ||
+        description.contains(normalizedQuery) ||
+        legacyCategory.contains(normalizedQuery);
+  }).toList();
+
+  notifyListeners();
+}
+
+void clearSearch() {
+  _isFiltering = false;
+
+  _selectedCategoryId = null;
+  _selectedCategoryName = null;
+  _categoryFilterError = null;
+  _categoryProducts = [];
+
+  _filteredProducts = List<Product>.from(_products);
+
+  notifyListeners();
+}
+
+ void clearFilter() {
+    clearSearch();
+}
 
   void removeFromCart(Product product) {
     _cart.remove(product);
@@ -260,18 +380,41 @@ class ProductProvider with ChangeNotifier {
     }
   }
 
-  Future<void> updateProduct(Product product) async {
-    try {
-      Product updatedProduct = await _productService.updateProduct(product);
-      int index = _products.indexWhere((prod) => prod.id == product.id);
-      if (index != -1) {
-        _products[index] = updatedProduct;
-        notifyListeners();
-      }
-    } catch (error) {
-      // Handle error
+ Future<Product> updateProduct(
+  Product product, {
+  List<Uint8List> newImages = const [],
+}) async {
+  try {
+    final updatedProduct =
+        await _productService.updateProduct(
+      product,
+      newImages: newImages,
+    );
+
+    final index = _products.indexWhere(
+      (item) => item.id == updatedProduct.id,
+    );
+
+    if (index >= 0) {
+      _products[index] = updatedProduct;
+    } else {
+      _products.add(updatedProduct);
     }
+
+    _filteredProducts =
+        List<Product>.from(_products);
+
+    notifyListeners();
+
+    return updatedProduct;
+  } catch (error) {
+    debugPrint(
+      'Error actualizando producto: $error',
+    );
+
+    rethrow;
   }
+}
 
   void updateQuantity(
       Product product, int newQuantity, InvoiceProvider invoiceProvider) {
@@ -303,29 +446,74 @@ class ProductProvider with ChangeNotifier {
     _selectedProducts.clear(); // Limpia la lista de seleccionados
     notifyListeners(); // Asegura que la UI se actualice
   }
+Future<void> deleteProduct(
+  String id,
+) async {
+  try {
+    await _productService.deleteProduct(id);
 
-  Future<void> deleteProduct(String id) async {
-    try {
-      await _productService.deleteProduct(id);
-      _products.removeWhere((prod) => prod.id == id);
-      notifyListeners();
-    } catch (error) {
-      // Handle error
-    }
+    _products.removeWhere(
+      (product) => product.id == id,
+    );
+
+    _filteredProducts.removeWhere(
+      (product) => product.id == id,
+    );
+
+    _categoryProducts.removeWhere(
+      (product) => product.id == id,
+    );
+
+    notifyListeners();
+  } catch (error) {
+    debugPrint(
+      'Error eliminando producto: $error',
+    );
+
+    rethrow;
   }
+}
 
-  /// Elimina una URL de imagen tanto en el backend como en memoria
-  Future<void> deleteProductImage(String productId, String imageUrl) async {
-    // 1) pide al service que la borre
-    final updated = await _service.deleteProductImage(productId, imageUrl);
+  Future<Product> deleteProductImage(
+  String productId,
+  String imageUrl,
+) async {
+  try {
+    final updated =
+        await _productService.deleteProductImage(
+      productId,
+      imageUrl,
+    );
 
-    // 2) actualiza la lista local
-    final idx = _products.indexWhere((p) => p.id == productId);
-    if (idx != -1) {
-      _products[idx] = updated;
-      notifyListeners();
+    final index = _products.indexWhere(
+      (product) => product.id == productId,
+    );
+
+    if (index >= 0) {
+      _products[index] = updated;
     }
+
+    final filteredIndex =
+        _filteredProducts.indexWhere(
+      (product) => product.id == productId,
+    );
+
+    if (filteredIndex >= 0) {
+      _filteredProducts[filteredIndex] =
+          updated;
+    }
+
+    notifyListeners();
+
+    return updated;
+  } catch (error) {
+    debugPrint(
+      'Error eliminando imagen: $error',
+    );
+
+    rethrow;
   }
+}
 
   Future<void> fetchNewArrivalsProducts({int limit = 100}) async {
     _loadingNewArrivals = true;
