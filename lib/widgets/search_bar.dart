@@ -18,7 +18,7 @@ class SearchBar extends StatelessWidget implements PreferredSizeWidget {
 
   const SearchBar({
     super.key,
-    this.hintText = 'Buscar productos, marca y más...',
+    this.hintText = 'Buscar productos, marcas y más...',
     this.initialQuery = '',
     this.onChanged,
     this.onSubmitted,
