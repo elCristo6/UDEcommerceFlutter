@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/product_model.dart';
 import '../providers/product_provider.dart';
 import '../widgets/search_bar.dart' as custom;
+import '../providers/auth_provider.dart';
 
 class StockScreen extends StatefulWidget {
   const StockScreen({super.key});
@@ -22,6 +23,19 @@ class _StockScreenState extends State<StockScreen> {
   static const Color _darkText = Color(0xFF0F172A);
   static const Color _mutedText = Color(0xFF64748B);
   static const Color _panelBorder = Color(0xFFE2E8F0);
+
+  @override
+void initState() {
+  super.initState();
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Si no es un administrador autenticado y válido (o el token venció), se saca inmediatamente
+    if (!authProvider.isAdmin) {
+      Navigator.pushReplacementNamed(context, '/infoProducts');
+    }
+  });
+}
 
   @override
   Widget build(BuildContext context) {

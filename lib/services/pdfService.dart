@@ -1,3 +1,4 @@
+
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:typed_data';
@@ -9,8 +10,6 @@ import 'package:universal_html/html.dart' as html;
 import '../models/invoice_model.dart';
 
 class PDFService {
-  // Caché estático, compartido entre instancias (importante porque en tu código
-  // a veces creas un PDFService nuevo en diferentes lugares).
   static final Map<String, Uint8List> _imageCache = {};
 
   String _formatCurrency(int value) {
@@ -31,13 +30,9 @@ class PDFService {
       final buffer = req.response as ByteBuffer;
       return buffer.asUint8List();
     } catch (e) {
-      // CORS o 404, etc.
-      // print('⚠️ No se pudo descargar imagen $url: $e');
       return null;
     }
   }
-
-  /// Precarga imágenes para un invoice (para primer render).
 
   Future<void> preloadInvoiceImages(Invoice invoice) async {
     final futures = <Future<void>>[];
@@ -47,271 +42,6 @@ class PDFService {
       final url = p.images.first;
       if (Uri.tryParse(url)?.isAbsolute != true) continue;
 
-      // si ya está en el propio producto o en el cache, no bajes de nuevo
-      if (p.cachedImageBytes != null || _imageCache.containsKey(url)) continue;
-
-      futures.add(_fetchBytesWeb(url).then((bytes) {
-        if (bytes != null) {
-          _imageCache[url] = bytes; // cache global
-          p.cachedImageBytes = bytes; // cache en el propio producto
-        }
-      }));
-    }
-
-    await Future.wait(futures);
-  }
-
-  Future<void> printInvoiceStyled(
-    Invoice invoice, {
-    String docType = 'FACTURA DE VENTA',
-  }) async {
-    try {
-      // Logo
-      final logoData = await rootBundle.load('assets/LogoPDF.png');
-
-      final logoBytes = logoData.buffer.asUint8List();
-      final logoBitmap = PdfBitmap(logoBytes);
-
-      // Documento
-      final document = PdfDocument();
-      final page = document.pages.add();
-      final graphics = page.graphics;
-      final pageSize = page.getClientSize();
-
-      // Estilos
-      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 14,
-          style: PdfFontStyle.bold);
-      final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 10,
-          style: PdfFontStyle.bold);
-      final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 10);
-      final tableHeaderColor = PdfColor(230, 230, 230);
-      await preloadInvoiceImages(invoice);
-      double top = 10;
-
-      // Logo
-      graphics.drawImage(logoBitmap, Rect.fromLTWH(20, top - 20, 120, 120));
-      // Empresa
-      graphics.drawString(
-        '''
-UD ELECTRONICS
-Desarrollo de software, electrónica, robótica, programación e impresión 3D
-NIT: 1022972666-6 REGIMEN SIMPLIFICADO
-KR 9 # 19  30 Local 202
-3208576038 * 3213213756 * 6012105424
-WWW.UDELECTRONICS.COM - udelectronicsbogota@gmail.com 
-        ''',
-        contentFont,
-        bounds: Rect.fromLTWH(150, top, pageSize.width - 100, 80),
-      );
-      top += 90;
-
-      // Título
-      graphics.drawString(
-        '${docType} No. ${invoice.consecutivo ?? '-'}',
-        titleFont,
-        bounds: Rect.fromLTWH(0, top, pageSize.width, 20),
-        format: PdfStringFormat(alignment: PdfTextAlignment.center),
-      );
-      top += 10;
-
-      // Fecha
-      final now = DateTime.now();
-      final fechaStr =
-          '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-      graphics.drawString('Fecha: $fechaStr', contentFont,
-          bounds: Rect.fromLTWH(20, top, pageSize.width - 40, 20));
-      top += 10;
-
-      // Cliente
-      final clientInfo = '''
-Cliente: ${invoice.user?.name ?? "Cliente Mostrador"}
-NIT/CC: ${invoice.user?.nit ?? ""}
-Teléfono: ${invoice.user?.phone ?? ""}
-Medio de pago: ${invoice.medioPago}
-      ''';
-      graphics.drawString(clientInfo, contentFont,
-          bounds: Rect.fromLTWH(20, top, pageSize.width - 40, 60));
-      top += 70;
-
-      // Tabla
-      final grid = PdfGrid();
-      grid.columns.add(count: 5);
-      grid.headers.add(1);
-
-      final header = grid.headers[0];
-      header.cells[0].value = 'Imagen';
-      header.cells[1].value = 'Producto';
-      header.cells[2].value = 'Cantidad';
-      header.cells[3].value = 'Precio Unitario';
-      header.cells[4].value = 'Subtotal';
-      header.style = PdfGridRowStyle(
-        backgroundBrush: PdfSolidBrush(tableHeaderColor),
-        font: headerFont,
-      );
-      for (final product in invoice.products) {
-        final row = grid.rows.add();
-
-        // 1) elegir URL (primer imagen)
-        String? url = product.images.isNotEmpty ? product.images.first : null;
-
-        // 2) obtener bytes (prioriza precarga en el modelo)
-        Uint8List? bytes = product.cachedImageBytes;
-        if (bytes == null &&
-            url != null &&
-            Uri.tryParse(url)?.isAbsolute == true) {
-          bytes = _imageCache[url];
-          bytes ??= await _fetchBytesWeb(url);
-          if (bytes != null) {
-            _imageCache[url] = bytes;
-            product.cachedImageBytes = bytes; // guarda para siguientes PDFs
-          }
-        }
-
-        // 3) pintar imagen / placeholder
-        try {
-          if (bytes != null) {
-            final bmp = PdfBitmap(bytes);
-            row.cells[0].value = '';
-            row.cells[0].style.backgroundImage = bmp;
-          } else {
-            row.cells[0].value = '[img]';
-          }
-        } catch (_) {
-          row.cells[0].value = '[img]';
-        }
-
-        // ⚠️ MUY IMPORTANTE: dar espacio a la miniatura
-        row.height = 56; // alto de la fila con imagen
-        // …
-
-        final price = (product.price.isNaN ? 0.0 : product.price);
-        final qty = (product.quantity <= 0 ? 1 : product.quantity);
-        final subtotal = (price * qty).round();
-        row.cells[1].value = product.name;
-        row.cells[2].value = '$qty';
-        row.cells[3].value = '\$${_formatCurrency(price.round())}';
-        row.cells[4].value = '\$${_formatCurrency(subtotal)}';
-      }
-
-// Ancho de la columna de imagen (para que se vea)
-      grid.columns[0].width = 56;
-
-      grid.style = PdfGridStyle(
-        font: contentFont,
-        cellPadding: PdfPaddings(left: 5, right: 5, top: 2, bottom: 2),
-      );
-
-      final format = PdfLayoutFormat(layoutType: PdfLayoutType.paginate);
-
-      final result = grid.draw(
-        page: page,
-        bounds:
-            Rect.fromLTWH(20, top, pageSize.width - 40, pageSize.height - top),
-        format: format,
-      );
-      if (result == null) {
-        throw Exception(
-            'PdfGrid.draw devolvió null (posible overflow o layout).');
-      }
-
-      top = result.bounds.bottom + 20;
-      // Totales
-      graphics.drawString(
-        'Pago con: \$${_formatCurrency(invoice.pagaCon.round())}',
-        contentFont,
-        bounds: Rect.fromLTWH(pageSize.width - 160, top, 140, 15),
-        format: PdfStringFormat(alignment: PdfTextAlignment.right),
-      );
-      top += 15;
-
-      graphics.drawString(
-        'Cambio: \$${_formatCurrency(invoice.cambio.round())}',
-        contentFont,
-        bounds: Rect.fromLTWH(pageSize.width - 160, top, 140, 15),
-        format: PdfStringFormat(alignment: PdfTextAlignment.right),
-      );
-      top += 15;
-
-      graphics.drawString(
-        'TOTAL: \$${_formatCurrency(invoice.totalAmount.round())}',
-        titleFont,
-        bounds: Rect.fromLTWH(0, top, pageSize.width, 20),
-        format: PdfStringFormat(alignment: PdfTextAlignment.right),
-      );
-
-      // Salida
-      final bytes = await document.save();
-      document.dispose();
-
-      final blob = html.Blob([Uint8List.fromList(bytes)], 'application/pdf');
-      final urlOut = html.Url.createObjectUrlFromBlob(blob);
-      html.window.open(urlOut, '_blank');
-
-      Future.delayed(const Duration(seconds: 30), () {
-        html.Url.revokeObjectUrl(urlOut);
-      });
-    } catch (e, st) {
-      // En web, esto te salva la vida para saber QUÉ producto revienta
-      // ignore: avoid_print
-      print('❌ Error generando PDF: $e');
-      // ignore: avoid_print
-      print(st);
-      rethrow; // para que tu UI muestre SnackBar de error (tu botón ya lo hace)
-    }
-  }
-}
-
-/*
-// lib/services/pdfService.dart
-// ignore_for_file: avoid_web_libraries_in_flutter
-import 'dart:typed_data';
-import 'package:flutter/services.dart';
-import 'package:syncfusion_flutter_pdf/pdf.dart';
-import 'package:universal_html/html.dart' as html;
-
-import '../models/invoice_model.dart';
-
-class PDFService {
-  // ===== Knobs de layout =====
-  static const double kMargin = 15.0;
-  static const double kImgW   = 140.0; // imágenes grandes
-  static const double kRowH   = 125.0; // filas altas para lucir miniatura
-  static const double kQtyW   = 42.0;  // “Cantidad” angosta
-  static const double kUnitW  = 100.0;
-  static const double kSubW   = 100.0;
-
-  // Caché global de miniaturas
-  static final Map<String, Uint8List> _imageCache = {};
-
-  String _formatCurrency(int value) {
-    return value.toString().replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (m) => '${m[1]}.',
-    );
-  }
-
-  Future<Uint8List?> _fetchBytesWeb(String url) async {
-    try {
-      final req = await html.HttpRequest.request(
-        url,
-        method: 'GET',
-        responseType: 'arraybuffer',
-        withCredentials: false,
-      );
-      final buffer = req.response as ByteBuffer;
-      return buffer.asUint8List();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// Precarga imágenes para mejorar el primer render del PDF.
-  Future<void> preloadInvoiceImages(Invoice invoice) async {
-    final futures = <Future<void>>[];
-    for (final p in invoice.products) {
-      if (p.images.isEmpty) continue;
-      final url = p.images.first;
-      if (Uri.tryParse(url)?.isAbsolute != true) continue;
       if (p.cachedImageBytes != null || _imageCache.containsKey(url)) continue;
 
       futures.add(_fetchBytesWeb(url).then((bytes) {
@@ -321,6 +51,7 @@ class PDFService {
         }
       }));
     }
+
     await Future.wait(futures);
   }
 
@@ -329,243 +60,291 @@ class PDFService {
     String docType = 'FACTURA DE VENTA',
   }) async {
     try {
-      // ===== Documento y fuentes =====
+      await preloadInvoiceImages(invoice);
+
+      // 1. Cargar Logo de marca
       final logoData = await rootBundle.load('assets/LogoPDF.png');
       final logoBytes = logoData.buffer.asUint8List();
       final logoBitmap = PdfBitmap(logoBytes);
 
+      // 2. CONFIGURACIÓN DE MÁRGENES Y ANCHOS
+      const double marginLeft = 15.0; // Desplazamiento seguro a la derecha
+      const double marginRight = 5.0;
+      const double pageWidth = 209.0; // Ancho total bobina 80mm
+      const double printableWidth = pageWidth - marginLeft - marginRight; // 189pt útiles
+
+      // Cálculo de altura ajustado al nuevo tamaño de fuente
+      const double baseHeight = 310.0;
+      final double itemsHeight = invoice.products.length * 32.0;
+      final double totalCalculatedHeight = baseHeight + itemsHeight;
+
       final document = PdfDocument();
+      document.pageSettings.margins.all = 0;
+      document.pageSettings.size = Size(pageWidth, totalCalculatedHeight);
+
       final page = document.pages.add();
       final graphics = page.graphics;
-      final pageSize = page.getClientSize();
 
-      final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 10);
-      final bold10 = PdfStandardFont(PdfFontFamily.helvetica, 10, style: PdfFontStyle.bold);
-      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 16, style: PdfFontStyle.bold);
+      // 3. FUENTES AMPLIADAS PARA MÁXIMA LEGIBILIDAD
+      final companyTitleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.0, style: PdfFontStyle.bold);
+      final companyFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0);
+      final companyBoldFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0, style: PdfFontStyle.bold);
 
-      double top = 20;
+      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.5, style: PdfFontStyle.bold);
+      final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0, style: PdfFontStyle.bold);
+      final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0);
+      final totalFont = PdfStandardFont(PdfFontFamily.helvetica, 11.0, style: PdfFontStyle.bold);
+      final smallFont = PdfStandardFont(PdfFontFamily.helvetica, 7.5);
 
-      // ===== Encabezado (logo + datos) =====
-      graphics.drawImage(logoBitmap, Rect.fromLTWH(0, -20, 150, 170));
+      final tableHeaderColor = PdfColor(240, 240, 240);
+      final linePen = PdfPen(PdfColor(170, 170, 170), width: 0.5);
+
+      double top = 4.0;
+
+      // -------------------------------------------------------------
+      // 4. ENCABEZADO (LOGO + DATOS DE EMPRESA)
+      // -------------------------------------------------------------
+      const double logoWidth = 72;
+      const double logoHeight = 72;
+
+      graphics.drawImage(logoBitmap, Rect.fromLTWH(marginLeft, top, logoWidth, logoHeight));
+
+      final double companyTextLeft = marginLeft + logoWidth + 4;
+      final double companyTextWidth = pageWidth - companyTextLeft - marginRight;
+
+      double headerTextTop = top;
+
+      graphics.drawString('UD ELECTRONICS', companyTitleFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 12));
+      headerTextTop += 12;
+
+      graphics.drawString('Tienda de robótica, electrónica', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('e impresión 3D profesional', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('Régimen simplificado', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('NIT: 1022972666-6', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('KR 9 # 19-30 L 202', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('3208576038 - 3213213756', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('6012105424', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('udelectronics.com', companyBoldFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 10;
+
+      graphics.drawString('UDElectronics Bogota-Colombia', companyFont,
+          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+      headerTextTop += 12;
+
+      top = (headerTextTop > top + logoHeight) ? headerTextTop : top + logoHeight + 4;
+
+      // Línea divisoria
+      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      top += 6;
+
+      // -------------------------------------------------------------
+      // 5. DATOS DE LA FACTURA Y CLIENTE
+      // -------------------------------------------------------------
       graphics.drawString(
-        '''
-UD ELECTRONICS
-Desarrollo de software, electrónica, robótica, programación e impresión 3D
-NIT: 1022972666-6  REGIMEN SIMPLIFICADO
-KR 9 # 19  30 Local 202
-3208576038  *  3213213756  *  6012105424
-WWW.UDELECTRONICS.COM  -  udelectronicsbogota@gmail.com
-''',
-        contentFont,
-        bounds: Rect.fromLTWH(kMargin + 130, top + 6, pageSize.width - (kMargin * 2 + 130), 80),
-      );
-      top += 90;
-
-      // ===== Título =====
-      graphics.drawString(
-        '${docType.toUpperCase()}  No. ${invoice.consecutivo ?? '-'}',
+        '$docType No. ${invoice.consecutivo ?? '-'}',
         titleFont,
-        bounds: Rect.fromLTWH(0, top, pageSize.width, 22),
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 14),
         format: PdfStringFormat(alignment: PdfTextAlignment.center),
       );
-      top += 8;
-      graphics.drawLine(
-        PdfPen(PdfColor(200, 200, 200), width: 0.8),
-        Offset(kMargin, top + 20),
-        Offset(pageSize.width - kMargin, top + 20),
-      );
-      top += 26;
+      top += 16;
 
-      // ===== Datos del cliente / fecha =====
       final now = DateTime.now();
       final fechaStr = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
-      graphics.drawString(
-        '''
+
+      final clientName = (invoice.user?.name != null && invoice.user!.name!.trim().isNotEmpty)
+          ? invoice.user!.name!.trim()
+          : "Cliente Mostrador";
+
+      final clientInfo = '''
 Fecha: $fechaStr
-Cliente: ${invoice.user?.name ?? "Cliente Mostrador"}
+Cliente: $clientName
 NIT/CC: ${invoice.user?.nit ?? ""}
 Teléfono: ${invoice.user?.phone ?? ""}
 Medio de pago: ${invoice.medioPago}
-''',
-        contentFont,
-        bounds: Rect.fromLTWH(kMargin, top, pageSize.width - kMargin * 2, 62),
-      );
-      top += 70;
+''';
 
-      // ===== Tabla =====
+      graphics.drawString(
+        clientInfo.trim(),
+        contentFont,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 58),
+      );
+      top += 58;
+
+      // -------------------------------------------------------------
+      // 6. TABLA DE PRODUCTOS CON MAYOR TAMAÑO Y MARGEN
+      // -------------------------------------------------------------
       final grid = PdfGrid();
       grid.columns.add(count: 5);
       grid.headers.add(1);
 
-      // Repetir encabezado en cada página
-      grid.repeatHeader = true;
-
-      // Encabezado
       final header = grid.headers[0];
-      header.cells[0].value = 'Imagen';
+      header.cells[0].value = 'Img';
       header.cells[1].value = 'Producto';
-      header.cells[2].value = 'Cantidad';
-      header.cells[3].value = 'Precio Unitario';
-      header.cells[4].value = 'Subtotal';
+      header.cells[2].value = 'Cant';
+      header.cells[3].value = 'P.Unit';
+      header.cells[4].value = 'Total';
       header.style = PdfGridRowStyle(
-        backgroundBrush: PdfSolidBrush(PdfColor(220, 240, 255)),
-        textBrush: PdfSolidBrush(PdfColor(35, 35, 35)),
-        font: bold10,
+        backgroundBrush: PdfSolidBrush(tableHeaderColor),
+        font: headerFont,
       );
 
-      // Alineaciones por columna
-      final leftFmt   = PdfStringFormat(alignment: PdfTextAlignment.left,   lineAlignment: PdfVerticalAlignment.middle);
-      final centerFmt = PdfStringFormat(alignment: PdfTextAlignment.center, lineAlignment: PdfVerticalAlignment.middle);
-      final rightFmt  = PdfStringFormat(alignment: PdfTextAlignment.right,  lineAlignment: PdfVerticalAlignment.middle);
+      // Distribuido en los 189 pt del espacio útil con margen izquierdo
+      grid.columns[0].width = 26;
+      grid.columns[1].width = 65;
+      grid.columns[2].width = 22;
+      grid.columns[3].width = 38;
+      grid.columns[4].width = 38;
 
-      grid.columns[0].format = centerFmt; // imagen
-      grid.columns[1].format = leftFmt;   // producto
-      grid.columns[2].format = centerFmt; // cantidad
-      grid.columns[3].format = rightFmt;  // unitario
-      grid.columns[4].format = rightFmt;  // subtotal
-
-      // Medidas de columnas
-      final double tableWidth = pageSize.width - kMargin * 2;
-      final double prodW = tableWidth - (kImgW + kQtyW + kUnitW + kSubW);
-
-      grid.columns[0].width = kImgW; // imagen grande
-      grid.columns[1].width = prodW; // nombre ocupa lo que queda
-      grid.columns[2].width = kQtyW; // cantidad angosta
-      grid.columns[3].width = kUnitW;
-      grid.columns[4].width = kSubW;
-
-      // Estilo general
-      grid.style = PdfGridStyle(
-        font: contentFont,
-        cellPadding: PdfPaddings(left: 7, right: 7, top: 7, bottom: 7),
-        borderOverlapStyle: PdfBorderOverlapStyle.inside,
-      );
-
-      // Filas con zebra suave y miniaturas grandes
       for (final product in invoice.products) {
         final row = grid.rows.add();
 
-        // Bytes de imagen (precarga o caché)
+        String? url = product.images.isNotEmpty ? product.images.first : null;
         Uint8List? bytes = product.cachedImageBytes;
-        final url = product.images.isNotEmpty ? product.images.first : null;
+
         if (bytes == null && url != null && Uri.tryParse(url)?.isAbsolute == true) {
-          bytes = _imageCache[url] ?? await _fetchBytesWeb(url);
+          bytes = _imageCache[url];
+          bytes ??= await _fetchBytesWeb(url);
           if (bytes != null) {
             _imageCache[url] = bytes;
             product.cachedImageBytes = bytes;
           }
         }
 
-        if (bytes != null) {
-          final bmp = PdfBitmap(bytes);
+        try {
+          if (bytes != null) {
+            final bmp = PdfBitmap(bytes);
+            row.cells[0].value = '';
+            row.cells[0].style.backgroundImage = bmp;
+          } else {
+            row.cells[0].value = '';
+          }
+        } catch (_) {
           row.cells[0].value = '';
-          row.cells[0].style.backgroundImage = bmp; // llena la celda
-        } else {
-          row.cells[0].value = '—';
         }
 
-        // Altura generosa para lucir la miniatura
-        row.height = kRowH;
+        row.height = 30;
 
-        // Datos
+        final price = (product.price.isNaN ? 0.0 : product.price);
+        final qty = (product.quantity <= 0 ? 1 : product.quantity);
+        final subtotal = (price * qty).round();
+
         row.cells[1].value = product.name;
-        row.cells[2].value = '${product.quantity}';
-        row.cells[3].value = '\$${_formatCurrency(product.price.round())}';
-        final subtotal = (product.price * product.quantity).round();
+        row.cells[2].value = '$qty';
+        row.cells[3].value = '\$${_formatCurrency(price.round())}';
         row.cells[4].value = '\$${_formatCurrency(subtotal)}';
-
-        // Zebra
-        if ((grid.rows.count - 1).isOdd) {
-          row.style = PdfGridRowStyle(
-            backgroundBrush: PdfSolidBrush(PdfColor(248, 251, 255)),
-          );
-        }
       }
 
-      // 1) DIBUJAR LA TABLA CON PAGINADO AUTOMÁTICO
-      final PdfLayoutResult result = grid.draw(
+      grid.style = PdfGridStyle(
+        font: smallFont,
+        cellPadding: PdfPaddings(left: 1, right: 1, top: 2, bottom: 2),
+      );
+
+      final format = PdfLayoutFormat(layoutType: PdfLayoutType.paginate);
+
+      final result = grid.draw(
         page: page,
-        bounds: Rect.fromLTWH(kMargin, top, tableWidth, page.getClientSize().height - top),
-        format: PdfLayoutFormat(layoutType: PdfLayoutType.paginate),
-      )!;
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 0),
+        format: format,
+      );
 
-      // 2) CONTINUAR EN LA ÚLTIMA PÁGINA DONDE ACABÓ LA TABLA
-      PdfPage lastPage = result.page;
-      PdfGraphics g = lastPage.graphics;
-      Size lastSize = lastPage.getClientSize();
-      double y = result.bounds.bottom + 16; // siguiente posición tras la tabla
-
-      // 3) SI NO CABEN LOS TOTALES, CREA UNA PÁGINA NUEVA
-      const double blockHeight = 60; // alto aproximado del bloque “pago/cambio/total”
-      if (y + blockHeight > lastSize.height - 20) {
-        lastPage = document.pages.add();
-        g = lastPage.graphics;
-        lastSize = lastPage.getClientSize();
-        y = kMargin;
+      if (result == null) {
+        throw Exception('PdfGrid.draw devolvió null.');
       }
 
-      // 4) DIBUJAR TOTALES EN LA PÁGINA CORRECTA
-      final rightFmtTotals = PdfStringFormat(
-        alignment: PdfTextAlignment.right,
-        lineAlignment: PdfVerticalAlignment.middle,
-      );
+      top = result.bounds.bottom + 8;
 
-      final labelW = 140.0;
-      final xRight = lastSize.width - kMargin;
+      // -------------------------------------------------------------
+      // 7. BLOQUE DE TOTALES DESTACADO
+      // -------------------------------------------------------------
+      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      top += 8;
 
-      g.drawString(
-        'Pago con:',
+      graphics.drawString(
+        'Pago con: \$${_formatCurrency(invoice.pagaCon.round())}',
         contentFont,
-        bounds: Rect.fromLTWH(xRight - labelW - 100, y, labelW, 16),
-        format: rightFmtTotals,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
+        format: PdfStringFormat(alignment: PdfTextAlignment.right),
       );
-      g.drawString(
-        '\$${_formatCurrency(invoice.pagaCon.round())}',
-        contentFont,
-        bounds: Rect.fromLTWH(xRight - 100, y, 100, 16),
-        format: rightFmtTotals,
-      );
-      y += 16;
+      top += 12;
 
-      g.drawString(
-        'Cambio:',
+      graphics.drawString(
+        'Cambio: \$${_formatCurrency(invoice.cambio.round())}',
         contentFont,
-        bounds: Rect.fromLTWH(xRight - labelW - 100, y, labelW, 16),
-        format: rightFmtTotals,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
+        format: PdfStringFormat(alignment: PdfTextAlignment.right),
       );
-      g.drawString(
-        '\$${_formatCurrency(invoice.cambio.round())}',
-        contentFont,
-        bounds: Rect.fromLTWH(xRight - 100, y, 100, 16),
-        format: rightFmtTotals,
-      );
-      y += 18;
+      top += 14;
 
-      final totalFont = PdfStandardFont(PdfFontFamily.helvetica, 14, style: PdfFontStyle.bold);
-      g.drawString(
-        'TOTAL:',
+      graphics.drawString(
+        'TOTAL: \$${_formatCurrency(invoice.totalAmount.round())}',
         totalFont,
-        bounds: Rect.fromLTWH(xRight - labelW - 100, y, labelW, 20),
-        format: rightFmtTotals,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 16),
+        format: PdfStringFormat(alignment: PdfTextAlignment.right),
       );
-      g.drawString(
-        '\$${_formatCurrency(invoice.totalAmount.round())}',
-        totalFont,
-        bounds: Rect.fromLTWH(xRight - 100, y, 100, 20),
-        format: rightFmtTotals,
+      top += 20;
+
+      // -------------------------------------------------------------
+      // 8. PIE DE PÁGINA POS
+      // -------------------------------------------------------------
+      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      top += 6;
+
+      graphics.drawString(
+        '¡Gracias por tu compra!',
+        headerFont,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
+        format: PdfStringFormat(alignment: PdfTextAlignment.center),
+      );
+      top += 12;
+
+      graphics.drawString(
+        'www.udelectronics.com',
+        contentFont,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 11),
+        format: PdfStringFormat(alignment: PdfTextAlignment.center),
       );
 
-      // ===== Salida Web =====
+      // -------------------------------------------------------------
+      // 9. GENERACIÓN Y APERTURA POPUP SÍNCRONA DE MEMORIA (BLOB)
+      // -------------------------------------------------------------
       final bytes = await document.save();
       document.dispose();
+
       final blob = html.Blob([Uint8List.fromList(bytes)], 'application/pdf');
       final urlOut = html.Url.createObjectUrlFromBlob(blob);
+
       html.window.open(urlOut, '_blank');
+
       Future.delayed(const Duration(seconds: 30), () {
         html.Url.revokeObjectUrl(urlOut);
       });
-    } catch (_) {
-      // silencioso para no romper el flujo si alguna imagen falla
+    } catch (e, st) {
+      print('❌ Error generando PDF: $e');
+      print(st);
+      rethrow;
     }
   }
-}*/
+}

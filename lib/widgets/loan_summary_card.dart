@@ -1,4 +1,4 @@
-// loan_summary_card.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +6,12 @@ import 'package:intl/intl.dart';
 import '../models/loan_model.dart';
 import '../providers/loan_provider.dart';
 import '../providers/auth_provider.dart';
+
+// Importaciones necesarias para reciclar el generador de PDFs
+import '../services/pdfService.dart';
+import '../models/invoice_model.dart';
+import '../models/product_model.dart';
+import '../models/user_model.dart';
 
 class LoanSummaryCard extends StatefulWidget {
   final LoanModel? loan;
@@ -46,12 +52,12 @@ class _LoanSummaryCardState extends State<LoanSummaryCard> {
   @override
   Widget build(BuildContext context) {
     final pendingItems = widget.loan?.items.where((it) => it.pendingQty > 0).toList() ?? [];
-    
     final int totalUnidades = pendingItems.fold(0, (sum, item) => sum + item.pendingQty);
-    final double totalCOP = pendingItems.fold(0.0, (sum, item) => sum + (item.pendingQty * item.customPrice));
-
+    
+    // Calculamos el total usando el customPrice de cada ítem
+    final double totalCobrar = pendingItems.fold(0.0, (sum, item) => sum + (item.customPrice * item.pendingQty));
     final double pagaCon = double.tryParse(_pagaConController.text) ?? 0.0;
-    final double cambio = (pagaCon > totalCOP) ? (pagaCon - totalCOP) : 0.0;
+    final double cambio = pagaCon > totalCobrar ? pagaCon - totalCobrar : 0.0;
 
     return Container(
       margin: const EdgeInsets.only(top: 8.0, bottom: 8.0, right: 8.0),
@@ -60,38 +66,41 @@ class _LoanSummaryCardState extends State<LoanSummaryCard> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(10),
         boxShadow: [
-          BoxShadow(color: Colors.grey.withOpacity(0.08), spreadRadius: 2, blurRadius: 6, offset: const Offset(0, 3)),
+          BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 6, offset: const Offset(0, 3)),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Resumen de Factura', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text('Resumen del Préstamo', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
+          
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Unidades Pendientes:', style: TextStyle(fontSize: 15)),
+              const Text('Unidades no devueltas:', style: TextStyle(fontSize: 16)),
               Text('$totalUnidades', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
           const SizedBox(height: 10),
+          
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Total a Cobrar:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              const Text('Total a Cobrar:', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               Text(
-                _currencyFormat.format(totalCOP),
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.green),
+                _currencyFormat.format(totalCobrar),
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.blue),
               ),
             ],
           ),
-          const SizedBox(height: 15),
-          const Divider(height: 20),
-          const Text('Medio de pago:', style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 10),
+          const Divider(height: 30),
+
+          const Text('Medio de Pago:', style: TextStyle(fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
           Wrap(
-            spacing: 8, runSpacing: 8,
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildPaymentOption('Efectivo'),
               _buildPaymentOption('Nequi'),
@@ -99,69 +108,131 @@ class _LoanSummaryCardState extends State<LoanSummaryCard> {
               _buildPaymentOption('Bancolombia'),
             ],
           ),
-          const SizedBox(height: 20),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text('Paga con:'),
-              SizedBox(
-                width: 130,
-                child: TextField(
-                  controller: _pagaConController,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.right,
-                  decoration: const InputDecoration(
-                    filled: true,
-                    fillColor: Colors.white,
-                    hintText: 'COP',
-                    isDense: true,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                    border: OutlineInputBorder(),
-                  ),
-                  style: const TextStyle(fontSize: 14),
-                  onChanged: (_) => setState(() {}),
-                ),
+          const SizedBox(height: 16),
+
+          if (_medioPago == 'Efectivo') ...[
+            TextField(
+              controller: _pagaConController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'El cliente paga con:',
+                prefixText: '\$ ',
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
-            ],
-          ),
-          if (_medioPago == 'Efectivo' && pagaCon > 0) ...[
+              onChanged: (val) => setState(() {}),
+            ),
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Cambio:'),
-                Text(_currencyFormat.format(cambio), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.blue)),
+                const Text('Cambio:', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Text(
+                  _currencyFormat.format(cambio),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: (pagaCon > 0 && pagaCon < totalCobrar) ? Colors.red : Colors.green,
+                  ),
+                ),
               ],
             ),
           ],
+
           const Spacer(),
+
+          // =========================================================
+          // BOTÓN: PREVISUALIZAR PDF SIN FACTURAR NI CERRAR
+          // =========================================================
+          SizedBox(
+            width: double.infinity,
+            height: 45,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.blue, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              icon: const Icon(Icons.picture_as_pdf, color: Colors.blue),
+              label: const Text('PREVISUALIZAR CUENTA (PDF)', style: TextStyle(color: Colors.blue, fontSize: 14, fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                if (totalUnidades == 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay productos para previsualizar.')));
+                  return;
+                }
+
+                // 1. Mapeamos los ítems prestados al formato Product de tu sistema
+                final productsForPdf = pendingItems.map((item) {
+                  return Product(
+                    id: item.productId,
+                    name: item.productName,
+                    price: item.customPrice, // Mantiene el precio especial
+                    description: '',
+                    stock: 0,
+                    category: '',
+                    images: item.image.isNotEmpty ? [item.image] : [],
+                    quantity: item.pendingQty, // Cantidad pendiente
+                  );
+                }).toList();
+
+                // 2. Construimos una factura temporal solo para armar el PDF
+                final previewInvoice = Invoice(
+                  id: "preview-${widget.loan?.id ?? 'temp'}",
+                  user: User(
+                    id: widget.client.id,
+                    name: widget.client.name,
+                    phone: widget.client.phone,
+                    nit: widget.client.detalles, 
+                    email: '', 
+                    role: 'store'
+                  ),
+                  products: productsForPdf,
+                  totalAmount: totalCobrar,
+                  // ✅ AQUÍ ESTÁ EL CAMBIO: Pasamos los valores calculados en la interfaz
+                  medioPago: _medioPago, 
+                  pagaCon: pagaCon,      
+                  cambio: cambio,        
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                );
+
+                // 3. Imprimimos reutilizando PDFService, pero con título diferente
+                await PDFService().printInvoiceStyled(previewInvoice, docType: 'ESTADO DE CUENTA');
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // =========================================================
+          // BOTÓN ORIGINAL: FINALIZAR Y FACTURAR (Cierra el préstamo)
+          // =========================================================
           SizedBox(
             width: double.infinity,
             height: 50,
             child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
               icon: const Icon(Icons.receipt_long, color: Colors.white),
-              onPressed: (widget.loan == null || totalUnidades == 0)
-                  ? null
-                  : () async {
-                      final token = context.read<AuthProvider>().token ?? '';
+              label: const Text('FINALIZAR Y FACTURAR', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              onPressed: () async {
+                if (totalUnidades == 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay productos pendientes por facturar.')));
+                  return;
+                }
 
-                      final success = await context.read<LoanProvider>().finalizeAndBill(
-                        token,
-                        loanId: widget.loan!.id,
-                        medioPago: _medioPago,
-                        pagaCon: pagaCon > 0 ? pagaCon : totalCOP,
-                        
-                      );
+                final token = context.read<AuthProvider>().token ?? '';
+                final success = await context.read<LoanProvider>().finalizeAndBill(
+                  token,
+                  loanId: widget.loan!.id,
+                  medioPago: _medioPago,
+                  pagaCon: pagaCon,
+                );
 
-                      if (success && mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('¡Préstamo facturado correctamente con precios especiales!')),
-                        );
-                        _pagaConController.clear();
-                      }
-                    },
-              label: const Text('FACTURAR Y CERRAR', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                if (success && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Préstamo facturado correctamente.')));
+                }
+              },
             ),
           ),
         ],

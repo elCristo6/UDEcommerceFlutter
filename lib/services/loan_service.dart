@@ -98,4 +98,71 @@ class LoanService {
     
     return response.statusCode == 200 || response.statusCode == 201;
   }
+
+// 6. Registrar un nuevo Cliente/Local con rol 'store' (POST /api/users/register)
+  Future<bool> createStore(String token, {
+    required String name,
+    required String phone,
+    required String detalles,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/users/register');
+      final bodyData = {
+        'name': name,
+        'phone': phone,
+        'detalles': detalles,
+        'role': 'store',
+        'email': '$phone@udelectronics.com',
+        'password': phone,
+        'nit': detalles,
+      };
+
+      // 🔥 ESPIAMOS QUÉ ESTÁ HACIENDO FLUTTER 🔥
+      print('--- DEBUG FLUTTER POST ---');
+      print('URL destino: $url');
+      print('Cuerpo JSON: ${jsonEncode(bodyData)}');
+      print('--------------------------');
+
+      final response = await http.post(
+        url,
+        headers: _headers(token),
+        body: jsonEncode(bodyData),
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        return true;
+      } else {
+        print('❌ Error del backend: ${response.statusCode}');
+        print('❌ Detalle: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Excepción de red en Flutter: $e');
+      return false;
+    }
+  }
+
+// Eliminar un Local por ID
+  Future<bool> deleteStore(String token, String id) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/users/id/$id'),
+        headers: _headers(token),
+      );
+      
+      if (response.statusCode == 200) {
+        return true; 
+      } else if (response.statusCode == 404) {
+        // ✅ MEJORA: Si ya no existe en la BD, le decimos a Flutter que lo quite de la pantalla igual
+        print('⚠️ El local ya había sido eliminado de la base de datos.');
+        return true; 
+      } else {
+        print('❌ Error al eliminar local: ${response.statusCode} - ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('❌ Excepción al eliminar local: $e');
+      return false;
+    }
+  }
 }

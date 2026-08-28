@@ -128,7 +128,7 @@ class _WhatsAppLogoWidgetState extends State<WhatsAppLogoWidget>
     final cartProvider = context.read<CartProvider>();
     final String phoneNumber = "+573208576038";
     
-    String message = "¡Hola UD Electronics! Estoy navegando en su tienda y tengo una consulta sobre sus componentes técnicos.";
+    String message = "¡Hola UD Electronics! 👋 Estuve viendo su página web y me gustaría recibir más información sobre sus productos.";
     
     if (cartProvider.totalItems > 0 && cartProvider.cart != null) {
       final itemsBuffer = StringBuffer();

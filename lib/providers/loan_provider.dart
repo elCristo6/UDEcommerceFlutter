@@ -98,4 +98,33 @@ class LoanProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+Future<bool> addStore(String token, {
+    required String name,
+    required String phone,
+    required String detalles,
+  }) async {
+    final success = await loanService.createStore(
+      token,
+      name: name,
+      phone: phone,
+      detalles: detalles,
+    );
+    if (success) {
+      // Recargamos clientes y préstamos para refrescar la lista de pestañas automáticamente
+      await fetchStoresAndLoans(token);
+    }
+    return success;
+  }
+  Future<bool> deleteStore(String token, String storeId) async {
+    // 1. Llama al servicio (que ya tiene http y baseUrl)
+    final success = await loanService.deleteStore(token, storeId);
+    
+    // 2. Si el servidor respondió que todo bien, lo borramos de la pantalla
+    if (success) {
+      stores.removeWhere((s) => s.id == storeId);
+      notifyListeners(); 
+    }
+    return success;
+  }
 }

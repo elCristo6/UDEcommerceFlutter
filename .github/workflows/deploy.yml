@@ -1,0 +1,37 @@
+name: Deploy Flutter Web to S3
+
+# 1. ¿Cuándo se ejecuta esto? Cuando haces push a la rama "main"
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 2. Descarga tu código
+      - name: Checkout del código
+        uses: actions/checkout@v3
+
+      # 3. Prepara Flutter en el servidor de GitHub
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      # 4. Instala dependencias y compila tu web
+      - name: Instalar dependencias y compilar
+        run: |
+          flutter pub get
+          flutter build web
+
+      # 5. Sube a AWS protegiendo tu carpeta de imágenes
+      - name: Desplegar a AWS S3
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: 'us-east-1' # Cambia esto si tu bucket está en otra región
+        run: |
+          aws s3 sync build/web s3://udelectronics.com/ --delete --exclude "products/*"--dryrun

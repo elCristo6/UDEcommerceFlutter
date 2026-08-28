@@ -1,13 +1,14 @@
+// lib/providers/auth_provider.dart
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ud_store_flutter_app/main.dart';
-import 'package:ud_store_flutter_app/providers/cart_provider.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
 
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../providers/cart_provider.dart';
+import 'package:ud_store_flutter_app/main.dart';
 
 class AuthProvider with ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -22,8 +23,21 @@ class AuthProvider with ChangeNotifier {
   String? get role => _role;
   bool get isLoading => _isLoading;
 
+  // ✅ Getter para saber si la sesión es válida (no nula y NO expirada)
+  bool get isAuth {
+    if (_token == null || _token!.isEmpty) return false;
+    if (JwtDecoder.isExpired(_token!)) {
+      logout(); // Cierra sesión de inmediato si el token venció
+      return false;
+    }
+    return true;
+  }
+
+  // ✅ Getter estricto para verificar si el usuario activo es administrador real
+  bool get isAdmin => isAuth && _role == 'admin';
+
   AuthProvider() {
-    _loadUserFromPrefs(); // Cargar sesión al iniciar
+    _loadUserFromPrefs();
   }
 
   Future<bool> login(String emailOrPhone, String password) async {
@@ -37,17 +51,18 @@ class AuthProvider with ChangeNotifier {
       _role = result['role'];
 
       await _saveToPrefs();
-      // Cargar la cesta desde el backend
+
       final cartProvider = Provider.of<CartProvider>(
         navigatorKey.currentContext!,
         listen: false,
       );
-      if (role == 'admin') {
-        await cartProvider.initGuest(); // fuerza local
-        // IMPORTANTE: NO llamar mergeGuestIntoAuth, NO llamar initAuth
+
+      if (_role == 'admin') {
+        await cartProvider.initGuest();
       } else {
         await cartProvider.mergeGuestIntoAuth(_token!);
       }
+
       _isLoading = false;
       notifyListeners();
       return true;
@@ -63,7 +78,6 @@ class AuthProvider with ChangeNotifier {
     _token = null;
     _role = null;
 
-    // 🔥 Limpiar carrito al cerrar sesión
     final cartProvider = Provider.of<CartProvider>(
       navigatorKey.currentContext!,
       listen: false,
@@ -92,11 +106,19 @@ class AuthProvider with ChangeNotifier {
     final role = prefs.getString('role');
 
     if (userString != null && token != null) {
+      // ✅ Si el token ya expiró en las SharedPreferences, se destruye la sesión
+      if (JwtDecoder.isExpired(token)) {
+        await prefs.remove('user');
+        await prefs.remove('token');
+        await prefs.remove('role');
+        notifyListeners();
+        return;
+      }
+
       _user = User.fromJson(jsonDecode(userString));
       _token = token;
       _role = role;
 
-      // Cargar la cesta al restaurar sesión
       final cartProvider = Provider.of<CartProvider>(
         navigatorKey.currentContext!,
         listen: false,
