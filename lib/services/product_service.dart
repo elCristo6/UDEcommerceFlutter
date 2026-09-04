@@ -63,12 +63,16 @@ class ProductService {
   Future<List<String>> uploadProductImagesBatch(
     String productId,
     List<Uint8List> images,
-    List<String> filenames,
-  ) async {
+    List<String> filenames, {
+    String storeId = 'udelectronics', // <-- Parámetro dinámico para múltiples tiendas
+  }) async {
     final uri = Uri.parse('$backendUrl/products/$productId');
     final req = http.MultipartRequest('PUT', uri);
 
-    // añadimos cada imagen al mismo campo 'images'
+    // 1. EL TEXTO DEBE IR PRIMERO: Inyectamos el ID de la tienda
+    req.fields['storeId'] = storeId;
+
+    // 2. LUEGO LOS ARCHIVOS: añadimos cada imagen al mismo campo 'images'
     for (var i = 0; i < images.length; i++) {
       req.files.add(http.MultipartFile.fromBytes(
         'images',
@@ -151,96 +155,75 @@ class ProductService {
       throw Exception(responseData['message'] ?? 'Failed to load product');
     }
   }
-  Future<Product> updateProduct(
-  Product product, {
-  List<Uint8List> newImages = const [],
-}) async {
-  final uri = Uri.parse(
-    '$backendUrl/products/${product.id}',
-  );
-
-  final request =
-      http.MultipartRequest('PUT', uri);
-
-  request.fields['name'] = product.name;
-  request.fields['price'] =
-      product.price.toString();
-  request.fields['description'] =
-      product.description;
-  request.fields['stock'] =
-      product.stock.toString();
-  request.fields['box'] =
-      product.box.join(',');
-  request.fields['category'] =
-      product.category;
-  request.fields['categories'] =
-      product.categories.join(',');
-
-  final timestamp =
-      DateTime.now().millisecondsSinceEpoch;
-
-  for (int index = 0;
-      index < newImages.length;
-      index++) {
-    request.files.add(
-      http.MultipartFile.fromBytes(
-        'images',
-        newImages[index],
-        filename:
-            'product_${timestamp}_$index.png',
-        contentType:
-            MediaType('image', 'png'),
-      ),
+ 
+Future<Product> updateProduct(
+    Product product, {
+    List<Uint8List> newImages = const [],
+    String storeId = 'udelectronics', // <-- Parámetro dinámico para múltiples tiendas
+  }) async {
+    final uri = Uri.parse(
+      '$backendUrl/products/${product.id}',
     );
-  }
 
-  final streamedResponse =
-      await request.send();
+    final request = http.MultipartRequest('PUT', uri);
 
-  final response =
-      await http.Response.fromStream(
-    streamedResponse,
-  );
+    // 1. EL TEXTO DEBE IR PRIMERO: Aseguramos que la tienda se lea antes que los bytes
+    request.fields['storeId'] = storeId;
+    
+    request.fields['name'] = product.name;
+    request.fields['price'] = product.price.toString();
+    request.fields['description'] = product.description;
+    request.fields['stock'] = product.stock.toString();
+    request.fields['box'] = product.box.join(',');
+    request.fields['category'] = product.category;
+    request.fields['categories'] = product.categories.join(',');
 
-  if (response.statusCode >= 200 &&
-      response.statusCode < 300) {
-    final decoded = jsonDecode(response.body);
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-    if (decoded is! Map<String, dynamic>) {
-      throw Exception(
-        'Respuesta inválida del servidor',
+    // 2. LOS ARCHIVOS VAN AL FINAL
+    for (int index = 0; index < newImages.length; index++) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'images',
+          newImages[index],
+          filename: 'product_${timestamp}_$index.png',
+          contentType: MediaType('image', 'png'),
+        ),
       );
     }
 
-    final productData =
-        decoded['data'] is Map<String, dynamic>
-            ? decoded['data']
-                as Map<String, dynamic>
-            : decoded;
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
 
-    return Product.fromJson(productData);
-  }
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      final decoded = jsonDecode(response.body);
 
-  String message =
-      'Error al actualizar producto';
+      if (decoded is! Map<String, dynamic>) {
+        throw Exception('Respuesta inválida del servidor');
+      }
 
-  try {
-    final decoded = jsonDecode(response.body);
+      final productData = decoded['data'] is Map<String, dynamic>
+          ? decoded['data'] as Map<String, dynamic>
+          : decoded;
 
-    if (decoded is Map<String, dynamic>) {
-      message =
-          decoded['message']?.toString() ??
-              decoded['error']?.toString() ??
-              message;
+      return Product.fromJson(productData);
     }
-  } catch (_) {
-    message =
-        'HTTP ${response.statusCode}: '
-        '${response.body}';
+
+    String message = 'Error al actualizar producto';
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        message = decoded['message']?.toString() ??
+            decoded['error']?.toString() ??
+            message;
+      }
+    } catch (_) {
+      message = 'HTTP ${response.statusCode}: ${response.body}';
+    }
+
+    throw Exception(message);
   }
 
-  throw Exception(message);
-}
   Future<void> deleteProduct(String id) async {
     final response = await http.delete(Uri.parse('$backendUrl/products/$id'));
 

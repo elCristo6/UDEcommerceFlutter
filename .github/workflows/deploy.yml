@@ -35,5 +35,5 @@ jobs:
           AWS_REGION: 'us-east-1' # Cambia esto si tu bucket está en otra región
           CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
-          aws s3 sync build/web s3://udelectronics.com/ --delete --exclude "products/*"
+          aws s3 sync build/web s3://udelectronics.com/ --delete
           aws cloudfront create-invalidation --distribution-id $CLOUDFRONT_DISTRIBUTION_ID --paths "/*"
