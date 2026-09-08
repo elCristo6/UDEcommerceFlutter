@@ -171,7 +171,7 @@ class StoreFooter extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Centro Comercial Parqueo Centro, Bogotá - Colombia',
+                      'Centro Comercial Centro, Bogotá - Colombia',
                       style: TextStyle(
                         color: Color(0xFF94A3B8),
                         fontSize: 13,
