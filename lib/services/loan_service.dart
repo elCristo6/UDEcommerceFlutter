@@ -84,10 +84,12 @@ class LoanService {
     required String loanId,
     required String medioPago,
     required double pagaCon,
+    required List<String> selectedItemIds,
   }) async {
     final Map<String, dynamic> body = {
       'medioPago': medioPago,
       'pagaCon': pagaCon,
+      'selectedItemIds': selectedItemIds,
     };
 
     final response = await http.post(

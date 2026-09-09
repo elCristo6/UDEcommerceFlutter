@@ -9,11 +9,23 @@ class LoanProvider with ChangeNotifier {
   List<LoanModel> _activeLoans = [];
   bool _isLoading = false;
 
+  final Map<String, bool> _itemSelections = {};
+
   LoanProvider({required this.loanService});
 
   List<LoanClient> get stores => _stores;
   List<LoanModel> get activeLoans => _activeLoans;
   bool get isLoading => _isLoading;
+
+  // ✅ MÉTODOS PARA CHECKBOXES
+  bool isItemSelected(String itemId) {
+    return _itemSelections[itemId] ?? true; // Por defecto todos están seleccionados
+  }
+
+  void toggleItemSelection(String itemId, bool value) {
+    _itemSelections[itemId] = value;
+    notifyListeners(); // Actualiza la lista y el resumen al instante
+  }
 
   Future<void> fetchStoresAndLoans(String token) async {
     if (token.isEmpty) return;
@@ -72,6 +84,7 @@ class LoanProvider with ChangeNotifier {
     required String loanId,
     required String medioPago,
     required double pagaCon,
+    required List<String> selectedItemIds,
   }) async {
     _isLoading = true;
     notifyListeners();
@@ -83,6 +96,7 @@ class LoanProvider with ChangeNotifier {
         loanId: loanId,
         medioPago: medioPago,
         pagaCon: pagaCon,
+        selectedItemIds: selectedItemIds,
       );
 
       if (success) {
