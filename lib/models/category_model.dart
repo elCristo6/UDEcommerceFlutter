@@ -6,7 +6,7 @@ class CategoryModel {
   CategoryModel({
     required this.id,
     required this.name,
-    required this.description,
+    this.description = '',
   });
 
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
@@ -15,5 +15,11 @@ class CategoryModel {
       name: json['name'] ?? '',
       description: json['description'] ?? '',
     );
+  }
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'description': description,
+    };
   }
 }
