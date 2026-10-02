@@ -138,7 +138,7 @@ class StoreFooter extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         const Text(
-          'Líderes en importación y distribución de componentes electrónicos, robótica e impresión 3D profesional.',
+          'Importación y distribución de componentes electrónicos, robótica e impresión 3D profesional.',
           style: TextStyle(
             color: Color(0xFF94A3B8),
             fontSize: 14,
