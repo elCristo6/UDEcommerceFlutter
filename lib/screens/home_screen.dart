@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
+import '../providers/auth_provider.dart';
 import '../providers/product_provider.dart';
 import '../widgets/category_sidebar.dart';
 import '../widgets/image_carousel.dart';
@@ -9,6 +9,7 @@ import '../widgets/search_bar.dart' as custom;
 import '../widgets/store_footer.dart';
 import '../widgets/top_selling_carousel.dart';
 import '../widgets/whatsapp_logo_widget.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -66,26 +67,38 @@ appBar: custom.SearchBar(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                     CategorySidebar(
+                    CategorySidebar(
   onCategoryTap: (category) async {
-    await context
-        .read<ProductProvider>()
-        .filterProductsByCategory(
-          categoryId: category.id,
-          categoryName: category.name,
-        );
+    final authProvider = context.read<AuthProvider>();
+    final productProvider = context.read<ProductProvider>();
+
+    // Filtramos por el ID real de la categoría.
+    await productProvider.filterProductsByCategory(
+      categoryId: category.id,
+      categoryName: category.name,
+    );
 
     if (!context.mounted) return;
 
-    Navigator.pushNamed(
-      context,
-      '/infoProducts',
-      arguments: {
-        'type': 'category',
-        'categoryId': category.id,
-        'categoryName': category.name,
-      },
-    );
+    // ADMINISTRADOR
+    if (authProvider.isAdmin) {
+      Navigator.pushNamed(
+        context,
+        '/infoProducts',
+        arguments: {
+          'type': 'category',
+          'categoryId': category.id,
+          'categoryName': category.name,
+        },
+      );
+    } else {
+      // VISITANTE O USUARIO SIN PERMISOS ADMINISTRATIVOS
+      Navigator.pushNamed(
+        context,
+        '/search',
+        arguments: category.name,
+      );
+    }
   },
 ),
                       const SizedBox(width: 18),

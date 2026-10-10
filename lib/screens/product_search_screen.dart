@@ -35,8 +35,20 @@ class _ProductSearchScreenState extends State<ProductSearchScreen> {
   void initState() {
     super.initState();
     Future.microtask(() {
-      context.read<ProductProvider>().filterProducts(widget.searchQuery);
-    });
+  if (!mounted) return;
+
+  final provider = context.read<ProductProvider>();
+
+  // Si venimos de una categoría, conservamos
+  // los productos filtrados previamente desde Home.
+  if (provider.isFilteringByCategory) {
+    return;
+  }
+
+  // Si venimos de una búsqueda normal,
+  // aplicamos el filtro de texto.
+  provider.filterProducts(widget.searchQuery);
+});
   }
 
   List<Product> _getSortedProducts(List<Product> products) {

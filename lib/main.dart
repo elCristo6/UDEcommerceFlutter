@@ -93,9 +93,19 @@ class MyApp extends StatelessWidget {
               );
             }
             // Ruta de información pública / catálogo general
-            if (routeName == '/infoProducts') {
-              return MaterialPageRoute(settings: settings, builder: (_) => const ProductInfoScreen());
-            }
+           if (routeName == '/infoProducts') {
+  if (!authProvider.isAdmin) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => const HomeScreen(),
+    );
+  }
+
+  return MaterialPageRoute(
+    settings: settings,
+    builder: (_) => const ProductInfoScreen(),
+  );
+}
 
             // 2. 🛡️ PROTECCIÓN DE RUTAS ADMINISTRATIVAS (/stock y /loans)
             if (routeName == '/stock') {
