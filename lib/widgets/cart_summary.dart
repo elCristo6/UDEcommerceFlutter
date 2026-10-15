@@ -26,6 +26,11 @@ class _CartSummaryState extends State<CartSummary> {
         );
   }
 
+  double _parseMoney(String value) {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
+    return double.tryParse(cleaned) ?? 0.0;
+  }
+
   @override
   void dispose() {
     _pagaConController.dispose();
@@ -107,9 +112,8 @@ class _CartSummaryState extends State<CartSummary> {
     final selectedUiItems = cartProvider.selectedUiItems;
     final subtotal = cartProvider.selectedSubtotal;
 
-    final pagaConParsed = double.tryParse(_pagaConController.text);
-    final pagaCon = pagaConParsed ?? invoiceProvider.pagaCon;
-    final cambio = pagaCon - subtotal;
+    final double pagaCon = _parseMoney(_pagaConController.text);
+    final double cambio = pagaCon - subtotal;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -156,9 +160,9 @@ class _CartSummaryState extends State<CartSummary> {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.right,
                   onChanged: (value) {
-                    final pagaConVal = double.tryParse(value) ?? 0.0;
-                    invoiceProvider.setPagaCon(pagaConVal);
-                    setState(() {});
+                    final double recibido = _parseMoney(value);
+
+                    invoiceProvider.setPagaCon(recibido);
                   },
                   decoration: const InputDecoration(
                     filled: true,
@@ -302,6 +306,11 @@ class _CartSummaryState extends State<CartSummary> {
                   // 2) ADMIN -> Backend + PDF (o solo PDF) + limpia LOCAL
                   // ============================================================
                   if (isAdmin) {
+                    final double recibido =
+                        _parseMoney(_pagaConController.text);
+
+                    invoiceProvider.updateTotals(subtotal);
+                    invoiceProvider.setPagaCon(recibido);
                     if (_isFacturaSelected) {
                       await invoiceProvider
                           .createInvoiceFromUiSelection(context);

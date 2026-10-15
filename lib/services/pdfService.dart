@@ -1,4 +1,3 @@
-
 // ignore_for_file: avoid_web_libraries_in_flutter
 import 'dart:async';
 import 'dart:typed_data';
@@ -8,6 +7,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 import 'package:universal_html/html.dart' as html;
 
 import '../models/invoice_model.dart';
+import '../models/local_cart_item_model.dart';
 
 class PDFService {
   static final Map<String, Uint8List> _imageCache = {};
@@ -58,6 +58,7 @@ class PDFService {
   Future<void> printInvoiceStyled(
     Invoice invoice, {
     String docType = 'FACTURA DE VENTA',
+    List<LocalCartItem> projectItems = const [],
   }) async {
     try {
       await preloadInvoiceImages(invoice);
@@ -71,12 +72,41 @@ class PDFService {
       const double marginLeft = 15.0; // Desplazamiento seguro a la derecha
       const double marginRight = 5.0;
       const double pageWidth = 209.0; // Ancho total bobina 80mm
-      const double printableWidth = pageWidth - marginLeft - marginRight; // 189pt útiles
+      const double printableWidth =
+          pageWidth - marginLeft - marginRight; // 189pt útiles
 
       // Cálculo de altura ajustado al nuevo tamaño de fuente
       const double baseHeight = 310.0;
       final double itemsHeight = invoice.products.length * 32.0;
-      final double totalCalculatedHeight = baseHeight + itemsHeight;
+
+      final projectFont = PdfStandardFont(
+        PdfFontFamily.helvetica,
+        8.0,
+      );
+
+      final double projectsHeight = projectItems.fold<double>(
+        0.0,
+        (sum, item) {
+          final description = item.projectDetails?.description.trim() ?? '';
+
+          final descriptionHeight = description.isEmpty
+              ? 0.0
+              : projectFont
+                      .measureString(
+                        description,
+                        layoutArea: const Size(189, 0),
+                      )
+                      .height +
+                  10;
+
+          return sum + 105 + descriptionHeight;
+        },
+      );
+
+      final double totalCalculatedHeight = baseHeight +
+          itemsHeight +
+          projectsHeight +
+          (projectItems.isNotEmpty ? 50 : 0);
 
       final document = PdfDocument();
       document.pageSettings.margins.all = 0;
@@ -86,14 +116,19 @@ class PDFService {
       final graphics = page.graphics;
 
       // 3. FUENTES AMPLIADAS PARA MÁXIMA LEGIBILIDAD
-      final companyTitleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.0, style: PdfFontStyle.bold);
+      final companyTitleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.0,
+          style: PdfFontStyle.bold);
       final companyFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0);
-      final companyBoldFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0, style: PdfFontStyle.bold);
+      final companyBoldFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0,
+          style: PdfFontStyle.bold);
 
-      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.5, style: PdfFontStyle.bold);
-      final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0, style: PdfFontStyle.bold);
+      final titleFont = PdfStandardFont(PdfFontFamily.helvetica, 10.5,
+          style: PdfFontStyle.bold);
+      final headerFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0,
+          style: PdfFontStyle.bold);
       final contentFont = PdfStandardFont(PdfFontFamily.helvetica, 8.0);
-      final totalFont = PdfStandardFont(PdfFontFamily.helvetica, 11.0, style: PdfFontStyle.bold);
+      final totalFont = PdfStandardFont(PdfFontFamily.helvetica, 11.0,
+          style: PdfFontStyle.bold);
       final smallFont = PdfStandardFont(PdfFontFamily.helvetica, 7.5);
 
       final tableHeaderColor = PdfColor(240, 240, 240);
@@ -107,7 +142,8 @@ class PDFService {
       const double logoWidth = 72;
       const double logoHeight = 72;
 
-      graphics.drawImage(logoBitmap, Rect.fromLTWH(marginLeft, top, logoWidth, logoHeight));
+      graphics.drawImage(
+          logoBitmap, Rect.fromLTWH(marginLeft, top, logoWidth, logoHeight));
 
       final double companyTextLeft = marginLeft + logoWidth + 4;
       final double companyTextWidth = pageWidth - companyTextLeft - marginRight;
@@ -115,49 +151,62 @@ class PDFService {
       double headerTextTop = top;
 
       graphics.drawString('UD ELECTRONICS', companyTitleFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 12));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 12));
       headerTextTop += 12;
 
       graphics.drawString('Tienda de robótica, electrónica', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('e impresión 3D profesional', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('Régimen simplificado', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('NIT: 1022972666-6', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('KR 9 # 19-30 L 202', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('3208576038 - 3213213756', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('6012105424', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('udelectronics.com', companyBoldFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 10;
 
       graphics.drawString('UDElectronics Bogota-Colombia', companyFont,
-          bounds: Rect.fromLTWH(companyTextLeft, headerTextTop, companyTextWidth, 10));
+          bounds: Rect.fromLTWH(
+              companyTextLeft, headerTextTop, companyTextWidth, 10));
       headerTextTop += 12;
 
-      top = (headerTextTop > top + logoHeight) ? headerTextTop : top + logoHeight + 4;
+      top = (headerTextTop > top + logoHeight)
+          ? headerTextTop
+          : top + logoHeight + 4;
 
       // Línea divisoria
-      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      graphics.drawLine(linePen, Offset(marginLeft, top),
+          Offset(pageWidth - marginRight, top));
       top += 6;
 
       // -------------------------------------------------------------
@@ -172,11 +221,13 @@ class PDFService {
       top += 16;
 
       final now = DateTime.now();
-      final fechaStr = '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
+      final fechaStr =
+          '${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${now.year}';
 
-      final clientName = (invoice.user?.name != null && invoice.user!.name!.trim().isNotEmpty)
-          ? invoice.user!.name!.trim()
-          : "Cliente Mostrador";
+      final clientName =
+          (invoice.user?.name != null && invoice.user!.name.trim().isNotEmpty)
+              ? invoice.user!.name.trim()
+              : "Cliente Mostrador";
 
       final clientInfo = '''
 Fecha: $fechaStr
@@ -224,7 +275,9 @@ Medio de pago: ${invoice.medioPago}
         String? url = product.images.isNotEmpty ? product.images.first : null;
         Uint8List? bytes = product.cachedImageBytes;
 
-        if (bytes == null && url != null && Uri.tryParse(url)?.isAbsolute == true) {
+        if (bytes == null &&
+            url != null &&
+            Uri.tryParse(url)?.isAbsolute == true) {
           bytes = _imageCache[url];
           bytes ??= await _fetchBytesWeb(url);
           if (bytes != null) {
@@ -276,18 +329,162 @@ Medio de pago: ${invoice.medioPago}
 
       top = result.bounds.bottom + 8;
 
+      // ============================================================
+      // DETALLES DE SERVICIOS E IMPRESIONES 3D
+      // ============================================================
+
+      for (final item in projectItems) {
+        final details = item.projectDetails;
+
+        if (details == null) continue;
+
+        graphics.drawLine(
+          linePen,
+          Offset(marginLeft, top),
+          Offset(pageWidth - marginRight, top),
+        );
+        top += 8;
+
+        graphics.drawString(
+          'DETALLES DEL PROYECTO',
+          headerFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            14,
+          ),
+        );
+        top += 16;
+
+        graphics.drawString(
+          item.name.toUpperCase(),
+          contentFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            12,
+          ),
+        );
+        top += 16;
+
+        // Descripción registrada en el formulario
+        final description = details.description.trim();
+
+        if (description.isNotEmpty) {
+          final descriptionSize = contentFont.measureString(
+            description,
+            layoutArea: Size(printableWidth, 0),
+          );
+
+          final descriptionHeight = descriptionSize.height + 8;
+
+          graphics.drawString(
+            description,
+            contentFont,
+            bounds: Rect.fromLTWH(
+              marginLeft,
+              top,
+              printableWidth,
+              descriptionHeight,
+            ),
+          );
+
+          top += descriptionHeight + 8;
+        }
+
+        // Valor comercial
+        graphics.drawString(
+          'Valor: \$${_formatCurrency(item.commercialTotal.round())}',
+          contentFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            12,
+          ),
+        );
+        top += 14;
+
+        // Abono
+        graphics.drawString(
+          'Abono: \$${_formatCurrency(details.advancePayment.round())}',
+          contentFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            12,
+          ),
+        );
+        top += 14;
+
+        // Saldo
+        graphics.drawString(
+          'Saldo: \$${_formatCurrency(item.pendingBalance.round())}',
+          headerFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            12,
+          ),
+        );
+        top += 14;
+
+        // Fecha de entrega
+        final date = details.deliveryDate;
+
+        if (date != null) {
+          final dateText = '${date.day.toString().padLeft(2, '0')}/'
+              '${date.month.toString().padLeft(2, '0')}/'
+              '${date.year}';
+
+          graphics.drawString(
+            'Entrega: $dateText',
+            contentFont,
+            bounds: Rect.fromLTWH(
+              marginLeft,
+              top,
+              printableWidth,
+              12,
+            ),
+          );
+
+          top += 14;
+        }
+
+        top += 10;
+      }
+
       // -------------------------------------------------------------
       // 7. BLOQUE DE TOTALES DESTACADO
       // -------------------------------------------------------------
-      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      graphics.drawLine(linePen, Offset(marginLeft, top),
+          Offset(pageWidth - marginRight, top));
       top += 8;
 
       graphics.drawString(
-        'Pago con: \$${_formatCurrency(invoice.pagaCon.round())}',
+        'Medio de pago: ${invoice.medioPago}',
         contentFont,
         bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
-        format: PdfStringFormat(alignment: PdfTextAlignment.right),
       );
+      top += 13;
+
+      graphics.drawString(
+        'Recibido: \$${_formatCurrency(invoice.pagaCon.round())}',
+        contentFont,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
+      );
+      top += 13;
+
+      graphics.drawString(
+        'Cambio: \$${_formatCurrency(invoice.cambio.round())}',
+        contentFont,
+        bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 12),
+      );
+      top += 15;
       top += 12;
 
       graphics.drawString(
@@ -309,7 +506,8 @@ Medio de pago: ${invoice.medioPago}
       // -------------------------------------------------------------
       // 8. PIE DE PÁGINA POS
       // -------------------------------------------------------------
-      graphics.drawLine(linePen, Offset(marginLeft, top), Offset(pageWidth - marginRight, top));
+      graphics.drawLine(linePen, Offset(marginLeft, top),
+          Offset(pageWidth - marginRight, top));
       top += 6;
 
       graphics.drawString(
@@ -326,7 +524,34 @@ Medio de pago: ${invoice.medioPago}
         bounds: Rect.fromLTWH(marginLeft, top, printableWidth, 11),
         format: PdfStringFormat(alignment: PdfTextAlignment.center),
       );
+      top += 18;
 
+      if (projectItems.isNotEmpty) {
+        graphics.drawLine(
+          linePen,
+          Offset(marginLeft, top),
+          Offset(pageWidth - marginRight, top),
+        );
+
+        top += 8;
+
+        graphics.drawString(
+          'CONSERVE ESTE RECIBO PARA RECLAMAR '
+          'SU Impresion 3D O PROYECTO.',
+          headerFont,
+          bounds: Rect.fromLTWH(
+            marginLeft,
+            top,
+            printableWidth,
+            35,
+          ),
+          format: PdfStringFormat(
+            alignment: PdfTextAlignment.center,
+          ),
+        );
+
+        top += 35;
+      }
       // -------------------------------------------------------------
       // 9. GENERACIÓN Y APERTURA POPUP SÍNCRONA DE MEMORIA (BLOB)
       // -------------------------------------------------------------

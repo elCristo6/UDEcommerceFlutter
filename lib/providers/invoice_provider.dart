@@ -499,7 +499,8 @@ class InvoiceProvider with ChangeNotifier {
         name: it.name,
         price: it
             .effectivePrice, // 👈 aquí ya va applied si el admin lo cambió en UI
-        description: '',
+        description:
+            it.isProjectProduct ? (it.projectDetails?.description ?? '') : '',
         stock: 0,
         category: '',
         images: it.image.isNotEmpty ? [it.image] : [],
@@ -524,7 +525,11 @@ class InvoiceProvider with ChangeNotifier {
       updatedAt: DateTime.now(),
     );
 
-    await PDFService().printInvoiceStyled(invoice, docType: docType);
+    await PDFService().printInvoiceStyled(
+      invoice,
+      docType: docType,
+      projectItems: selected.where((it) => it.isProjectProduct).toList(),
+    );
   }
 
   Future<void> createInvoiceFromUiSelection(
@@ -571,6 +576,17 @@ class InvoiceProvider with ChangeNotifier {
         return sum + (qty * price);
       },
     );
+    // Total que realmente se debe cobrar.
+    final double totalCobrar = totalAmount;
+
+// Valor entregado por el cliente.
+// Para efectivo se usa el monto registrado;
+// para otros medios, el pago normalmente es exacto.
+    final double pagoRecibido = _pagaCon;
+
+    final double cambioCalculado = _medioPago == 'Efectivo'
+        ? (pagoRecibido - totalCobrar).clamp(0.0, double.infinity).toDouble()
+        : 0.0;
 
     final payload = {
       "name": _currentUser?.name ?? "Cliente",
@@ -579,8 +595,8 @@ class InvoiceProvider with ChangeNotifier {
       "cc": _currentUser?.nit ?? "",
       "products": payloadProducts,
       "medioPago": _medioPago,
-      "pagaCon": _pagaCon,
-      "cambio": _cambio,
+      "pagaCon": pagoRecibido,
+      "cambio": cambioCalculado,
       "totalAmount": totalAmount,
       "consecutivo": consecutivo
     };
@@ -598,7 +614,8 @@ class InvoiceProvider with ChangeNotifier {
           id: it.productId,
           name: it.name,
           price: it.effectivePrice, // ✅ correcto
-          description: '',
+          description:
+              it.isProjectProduct ? (it.projectDetails?.description ?? '') : '',
           stock: 0,
           category: '',
           images: it.image.isNotEmpty ? [it.image] : [],
@@ -612,14 +629,18 @@ class InvoiceProvider with ChangeNotifier {
         products: productsForPdf,
         totalAmount: totalAmount,
         medioPago: _medioPago,
-        pagaCon: _pagaCon,
-        cambio: _cambio,
+        pagaCon: pagoRecibido,
+        cambio: cambioCalculado,
         consecutivo: consecutivo,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      await PDFService().printInvoiceStyled(invoice, docType: docType);
+      await PDFService().printInvoiceStyled(
+        invoice,
+        docType: docType,
+        projectItems: selected.where((it) => it.isProjectProduct).toList(),
+      );
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Factura #$consecutivo creada correctamente")),

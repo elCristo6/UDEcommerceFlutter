@@ -8,6 +8,7 @@ import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
 import '../providers/invoice_provider.dart';
 import '../providers/product_provider.dart';
+import '../widgets/project_details_card.dart';
 
 class ProductList extends StatefulWidget {
   const ProductList({Key? key}) : super(key: key);
@@ -674,7 +675,15 @@ class _ProductListState extends State<ProductList> {
                               if (token.isEmpty) return;
 
                               // ✅ BLOQUEO: no permitir agregar si no hay stock
-                              if (product.stock <= 0) {
+                              final normalizedName =
+                                  product.name.trim().toLowerCase();
+
+                              final isProjectProduct =
+                                  normalizedName == 'servicio' ||
+                                      normalizedName == 'impresión 3d' ||
+                                      normalizedName == 'impresion 3d';
+
+                              if (!isProjectProduct && product.stock <= 0) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
                                     content: Text('Sin stock'),
@@ -789,113 +798,187 @@ class _ProductListState extends State<ProductList> {
 
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 6),
-            child: ListTile(
-              leading: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Transform.scale(
-                    scale: 1.5,
-                    child: Checkbox(
-                      value: cartProvider.isSelected(productId),
-                      onChanged: (value) {
-                        cartProvider.toggleSelection(productId, value == true);
-                      },
-                      shape: const CircleBorder(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  it.image.isNotEmpty
-                      ? Image.network(
-                          Uri.encodeFull(it.image),
-                          width: 60,
-                          height: 60,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) {
-                            return const Icon(Icons.broken_image, size: 50);
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ListTile(
+                  leading: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Transform.scale(
+                        scale: 1.5,
+                        child: Checkbox(
+                          value: cartProvider.isSelected(productId),
+                          onChanged: (value) {
+                            cartProvider.toggleSelection(
+                              productId,
+                              value == true,
+                            );
                           },
-                        )
-                      : const Icon(Icons.image, size: 50),
-                ],
-              ),
-              title: Text(it.name),
-
-              // ✅ AQUÍ VA LA EDICIÓN DE PRECIO LOCAL (solo admin)
-              subtitle: isAdmin
-                  ? Row(
-                      children: [
-                        const Text(
-                          'COP ',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          shape: const CircleBorder(),
                         ),
-                        SizedBox(
-                          width: 70,
-                          child: TextFormField(
-                            controller: priceController,
-                            keyboardType: TextInputType.number,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
-                            decoration: const InputDecoration(
-                              border: InputBorder.none,
-                              isDense: true,
-                              contentPadding: EdgeInsets.symmetric(vertical: 2),
-                            ),
-                            onChanged: (value) async {
-                              final clean = value.replaceAll('.', '').trim();
-                              final newPrice = int.tryParse(clean);
-                              if (newPrice == null) return;
-
-                              // si vuelve al precio base => limpia override
-                              if (newPrice == it.price.toInt()) {
-                                await cartProvider
-                                    .clearLocalAppliedPrice(productId);
-                              } else if (newPrice > 0) {
-                                await cartProvider.setLocalAppliedPrice(
-                                  productId,
-                                  newPrice.toDouble(),
+                      ),
+                      const SizedBox(width: 8),
+                      it.image.isNotEmpty
+                          ? Image.network(
+                              Uri.encodeFull(it.image),
+                              width: 60,
+                              height: 60,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) {
+                                return const Icon(
+                                  Icons.broken_image,
+                                  size: 50,
                                 );
-                              }
+                              },
+                            )
+                          : const Icon(Icons.image, size: 50),
+                    ],
+                  ),
 
-                              cartProvider.sanitizeSelection();
-                            },
+                  title: Text(it.name),
+
+                  // Precio comercial editable solo por admin.
+                  subtitle: isAdmin
+                      ? Row(
+                          children: [
+                            const Text(
+                              'COP ',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            SizedBox(
+                              width: 90,
+                              child: TextFormField(
+                                controller: priceController,
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                decoration: const InputDecoration(
+                                  border: InputBorder.none,
+                                  isDense: true,
+                                  contentPadding:
+                                      EdgeInsets.symmetric(vertical: 2),
+                                ),
+                                onChanged: (value) async {
+                                  final clean =
+                                      value.replaceAll('.', '').trim();
+
+                                  final newPrice = int.tryParse(clean);
+
+                                  if (newPrice == null) return;
+
+                                  if (newPrice == it.price.toInt()) {
+                                    await cartProvider
+                                        .clearLocalAppliedPrice(productId);
+                                  } else if (newPrice > 0) {
+                                    await cartProvider.setLocalAppliedPrice(
+                                      productId,
+                                      newPrice.toDouble(),
+                                    );
+                                  }
+
+                                  cartProvider.sanitizeSelection();
+                                },
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          'COP ${formatCurrency(priceToShow)}',
+                          style: const TextStyle(fontSize: 14),
+                        ),
+
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Los proyectos siempre tienen cantidad 1.
+                      if (isAdmin && it.isProjectProduct)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            '1 proyecto',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blueGrey,
+                            ),
                           ),
+                        )
+                      else
+                        qtyClassic(
+                          context: context,
+                          id: productId,
+                          quantity: quantity,
+                          min: 1,
+                          max: maxStock,
+                          onChange: (newQty) async {
+                            await cartProvider.setLocalQuantity(
+                              productId,
+                              newQty,
+                            );
+                            cartProvider.sanitizeSelection();
+                          },
+                        ),
+
+                      const SizedBox(width: 8),
+
+                      IconButton(
+                        icon: const Icon(
+                          Icons.delete,
+                          color: Colors.red,
+                        ),
+                        onPressed: () async {
+                          await cartProvider.removeLocal(productId);
+                          cartProvider.sanitizeSelection();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Formulario exclusivo para administradores.
+                if (isAdmin && it.isProjectProduct)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                    ),
+                    child: ExpansionTile(
+                      key: PageStorageKey(
+                        'project_${it.productId}',
+                      ),
+                      initiallyExpanded:
+                          it.projectDetails == null || !it.isProjectValid,
+                      leading: const Icon(
+                        Icons.assignment_outlined,
+                        color: Colors.blueAccent,
+                      ),
+                      title: const Text(
+                        'Detalles del proyecto',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        it.projectDetails == null
+                            ? 'Pendiente de diligenciar'
+                            : it.isProjectValid
+                                ? 'Abono: \$${formatCurrency(it.amountToCollect.round())}'
+                                : 'Información incompleta',
+                      ),
+                      children: [
+                        ProjectDetailsCard(
+                          key: ValueKey(it.productId),
+                          item: it,
                         ),
                       ],
-                    )
-                  : Text(
-                      'COP ${formatCurrency(priceToShow)}',
-                      style: const TextStyle(fontSize: 14),
                     ),
-
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  qtyClassic(
-                    context: context,
-                    id: productId,
-                    quantity: quantity,
-                    min: 1,
-                    max: maxStock,
-                    onChange: (newQty) async {
-                      await cartProvider.setLocalQuantity(productId, newQty);
-                      cartProvider.sanitizeSelection();
-                    },
                   ),
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () async {
-                      await cartProvider.removeLocal(productId);
-                      cartProvider.sanitizeSelection();
-                    },
-                  ),
-                ],
-              ),
+              ],
             ),
           );
         },
@@ -980,8 +1063,7 @@ class _ProductListState extends State<ProductList> {
                   id: product.id,
                   quantity: quantity,
                   min: 1,
-                  // max: product.stock > 0 ? product.stock : 9999,
-                  max: product.stock, // si es 0, setQty mostrará "Sin stock"
+                  max: product.stock,
                   onChange: (newQty) async {
                     await _updateCartItem(
                       cartProvider,
@@ -990,16 +1072,22 @@ class _ProductListState extends State<ProductList> {
                       item,
                       newQuantity: newQty,
                     );
+
+                    cartProvider.sanitizeSelection();
                   },
                 ),
                 const SizedBox(width: 8),
                 IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(
+                    Icons.delete,
+                    color: Colors.red,
+                  ),
                   onPressed: () async {
                     await cartProvider.removeItem(
                       token,
                       productId: product.id,
                     );
+
                     cartProvider.sanitizeSelection();
                   },
                 ),

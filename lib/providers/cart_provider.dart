@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../models/project_details_model.dart';
 import '../models/cart_model.dart';
 import '../models/local_cart_item_model.dart';
 import '../models/product_model.dart';
@@ -139,6 +140,126 @@ class CartProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // ===================== GESTIÓN LOCAL DE PROYECTOS =====================
+
+  /// Guarda los detalles de un proyecto.
+  ///
+  /// Solo aplica a Servicio e Impresión 3D.
+  /// No modifica el precio comercial del producto.
+  Future<void> setLocalProjectDetails(
+    String productId,
+    ProjectDetails details,
+  ) async {
+    final item = _localItems[productId];
+
+    if (item == null || !item.isProjectProduct) {
+      return;
+    }
+
+    if (item.quantity != 1) {
+      throw StateError(
+        'Los proyectos deben tener cantidad 1.',
+      );
+    }
+
+    _localItems[productId] = item.copyWith(
+      projectDetails: details,
+    );
+
+    notifyListeners();
+    await _persistLocal();
+  }
+
+  /// Actualiza únicamente la descripción.
+  Future<void> setProjectDescription(
+    String productId,
+    String description,
+  ) async {
+    final item = _localItems[productId];
+
+    if (item == null || !item.isProjectProduct) {
+      return;
+    }
+
+    final current =
+        item.projectDetails ?? const ProjectDetails();
+
+    await setLocalProjectDetails(
+      productId,
+      current.copyWith(description: description),
+    );
+  }
+
+  /// Actualiza el abono.
+  ///
+  /// Se permiten valores temporales como 0 mientras
+  /// el administrador está diligenciando el formulario.
+  /// La validación final impide facturar con abono <= 0.
+  Future<void> setProjectAdvancePayment(
+    String productId,
+    double amount,
+  ) async {
+    final item = _localItems[productId];
+
+    if (item == null || !item.isProjectProduct) {
+      return;
+    }
+
+    if (!amount.isFinite || amount < 0) {
+      throw ArgumentError(
+        'El abono debe ser un valor válido.',
+      );
+    }
+
+    final current =
+        item.projectDetails ?? const ProjectDetails();
+
+    await setLocalProjectDetails(
+      productId,
+      current.copyWith(advancePayment: amount),
+    );
+  }
+
+  /// Actualiza la fecha de entrega.
+  Future<void> setProjectDeliveryDate(
+    String productId,
+    DateTime date,
+  ) async {
+    final item = _localItems[productId];
+
+    if (item == null || !item.isProjectProduct) {
+      return;
+    }
+
+    final current =
+        item.projectDetails ?? const ProjectDetails();
+
+    await setLocalProjectDetails(
+      productId,
+      current.copyWith(deliveryDate: date),
+    );
+  }
+
+  /// Elimina la información de un proyecto,
+  /// sin eliminar el producto de la cesta.
+  Future<void> clearLocalProjectDetails(
+    String productId,
+  ) async {
+    final item = _localItems[productId];
+
+    if (item == null || !item.isProjectProduct) {
+      return;
+    }
+
+    _localItems[productId] = item.copyWith(
+      clearProjectDetails: true,
+    );
+
+    notifyListeners();
+    await _persistLocal();
+  }
+
+
   /// Subtotal solo de seleccionados (esto alimenta CartSummary)
   double get selectedSubtotal {
     if (_selectedIds.isEmpty) return 0.0;
@@ -150,6 +271,55 @@ class CartProvider with ChangeNotifier {
 
   int get selectedUnits =>
       selectedUiItems.fold<int>(0, (s, it) => s + it.quantity);
+
+
+  // ===================== PROYECTOS =====================
+
+  /// Valor comercial de todos los elementos seleccionados.
+  /// Incluye el precio completo de los proyectos.
+  double get selectedCommercialTotal {
+    return selectedUiItems.fold<double>(
+      0.0,
+      (sum, item) => sum + item.commercialTotal,
+    );
+  }
+
+  /// Dinero que efectivamente debe ingresar a caja.
+  /// Productos normales: precio completo.
+  /// Servicio / Impresión 3D: únicamente el abono.
+  double get selectedAmountToCollect {
+    return selectedUiItems.fold<double>(
+      0.0,
+      (sum, item) => sum + item.amountToCollect,
+    );
+  }
+
+  /// Suma de los saldos pendientes de los proyectos.
+  double get selectedPendingBalance {
+    return selectedUiItems.fold<double>(
+      0.0,
+      (sum, item) => sum + item.pendingBalance,
+    );
+  }
+
+  /// Proyectos seleccionados que todavía tienen
+  /// información incompleta o inválida.
+  List<LocalCartItem> get invalidSelectedProjects {
+    return selectedUiItems
+        .where(
+          (item) =>
+              item.isProjectProduct && !item.isProjectValid,
+        )
+        .toList();
+  }
+
+  /// Determina si los productos seleccionados
+  /// están listos para finalizar la venta.
+  bool get canCheckoutSelection {
+    return selectedUiItems.isNotEmpty &&
+        invalidSelectedProjects.isEmpty;
+  }
+
 
   bool get allSelected {
     final items = uiItems; // tu lista unificada (guest + auth)
@@ -284,6 +454,24 @@ class CartProvider with ChangeNotifier {
 
   Future<void> addLocal(Product product, {int quantity = 1}) async {
     final id = product.id;
+
+    final normalizedName = product.name.trim().toLowerCase();
+
+    final isProjectProduct =
+        normalizedName == 'servicio' ||
+        normalizedName == 'impresión 3d' ||
+        normalizedName == 'impresion 3d';
+
+    if (isProjectProduct) {
+      quantity = 1;
+
+      if (_localItems.containsKey(id)) {
+        // Ya existe un encargo de este tipo en la cesta.
+        // No incrementar la cantidad ni borrar sus datos.
+        return;
+      }
+    }
+
     final img = product.images.isNotEmpty ? product.images.first : '';
 
     if (_localItems.containsKey(id)) {
@@ -320,6 +508,11 @@ class CartProvider with ChangeNotifier {
   Future<void> increaseLocal(String productId) async {
     final it = _localItems[productId];
     if (it == null) return;
+
+    if (it.isProjectProduct) {
+      return;
+    }
+
     it.quantity += 1;
     await _persistLocal();
     // no hace falta sanear, pero no hace daño
@@ -344,6 +537,10 @@ class CartProvider with ChangeNotifier {
   Future<void> setLocalQuantity(String productId, int quantity) async {
     final it = _localItems[productId];
     if (it == null) return;
+
+    if (it.isProjectProduct && quantity > 1) {
+      quantity = 1;
+    }
 
     if (quantity <= 0) {
       _localItems.remove(productId);
