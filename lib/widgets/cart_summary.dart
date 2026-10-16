@@ -111,9 +111,19 @@ class _CartSummaryState extends State<CartSummary> {
     // =========================
     final selectedUiItems = cartProvider.selectedUiItems;
     final subtotal = cartProvider.selectedSubtotal;
+    final double totalCobrar = selectedUiItems.fold<double>(
+      0.0,
+      (sum, item) {
+        if (item.isProjectProduct) {
+          return sum + (item.projectDetails?.advancePayment ?? 0.0);
+        }
+
+        return sum + item.effectivePrice * item.quantity;
+      },
+    );
 
     final double pagaCon = _parseMoney(_pagaConController.text);
-    final double cambio = pagaCon - subtotal;
+    final double cambio = pagaCon - totalCobrar;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -143,7 +153,7 @@ class _CartSummaryState extends State<CartSummary> {
           // ==================== SUBTOTAL ====================
           _buildSummaryRow(
             'Subtotal',
-            'COP ${formatCurrency(subtotal.toInt())}',
+            'COP ${formatCurrency(totalCobrar.toInt())}',
           ),
 
           const SizedBox(height: 10),
@@ -197,7 +207,7 @@ class _CartSummaryState extends State<CartSummary> {
           // ==================== TOTAL ====================
           _buildSummaryRow(
             'TOTAL:',
-            'COP ${formatCurrency(subtotal.toInt())}',
+            'COP ${formatCurrency(totalCobrar.toInt())}',
             isBold: true,
             isLarge: true,
           ),
@@ -309,7 +319,7 @@ class _CartSummaryState extends State<CartSummary> {
                     final double recibido =
                         _parseMoney(_pagaConController.text);
 
-                    invoiceProvider.updateTotals(subtotal);
+                    invoiceProvider.updateTotals(totalCobrar);
                     invoiceProvider.setPagaCon(recibido);
                     if (_isFacturaSelected) {
                       await invoiceProvider

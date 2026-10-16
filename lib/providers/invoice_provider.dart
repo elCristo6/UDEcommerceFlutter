@@ -493,6 +493,29 @@ class InvoiceProvider with ChangeNotifier {
       return;
     }
 
+    final invalidProjects = selected.where((item) {
+      if (!item.isProjectProduct) return false;
+
+      final details = item.projectDetails;
+
+      if (details == null) return true;
+
+      return details.advancePayment <= 0 ||
+          details.advancePayment > item.commercialTotal;
+    }).toList();
+
+    if (invalidProjects.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El abono debe ser mayor a cero y no puede superar '
+            'el valor total del proyecto.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final products = selected.map((it) {
       return Product(
         id: it.productId,
@@ -560,11 +583,14 @@ class InvoiceProvider with ChangeNotifier {
     final int consecutivo = await _invoiceService.fetchNextConsecutive();
 
     final payloadProducts = selected.map((it) {
+      final double unitPrice = it.isProjectProduct
+          ? (it.projectDetails?.advancePayment ?? 0.0)
+          : it.effectivePrice;
+
       return {
         "productId": it.productId,
         "quantity": it.quantity,
-        // ✅ NUNCA NULL:
-        "appliedPrice": it.effectivePrice,
+        "appliedPrice": unitPrice,
       };
     }).toList();
 
@@ -582,12 +608,23 @@ class InvoiceProvider with ChangeNotifier {
 // Valor entregado por el cliente.
 // Para efectivo se usa el monto registrado;
 // para otros medios, el pago normalmente es exacto.
-    final double pagoRecibido = _pagaCon;
+    // Identificar si la factura contiene Servicio o Impresión 3D.
+    final bool tieneProyecto = selected.any(
+      (item) => item.isProjectProduct,
+    );
 
-    final double cambioCalculado = _medioPago == 'Efectivo'
-        ? (pagoRecibido - totalCobrar).clamp(0.0, double.infinity).toDouble()
-        : 0.0;
+// En proyectos, el abono ya representa dinero recibido.
+// En ventas normales, se conserva el valor ingresado en "Paga con".
+    final double pagoRecibido = tieneProyecto ? totalCobrar : _pagaCon;
 
+// Los proyectos no generan cambio adicional por el abono.
+    final double cambioCalculado = tieneProyecto
+        ? 0.0
+        : (_medioPago == 'Efectivo'
+            ? (pagoRecibido - totalCobrar)
+                .clamp(0.0, double.infinity)
+                .toDouble()
+            : 0.0);
     final payload = {
       "name": _currentUser?.name ?? "Cliente",
       "phone": _currentUser?.phone ?? "",

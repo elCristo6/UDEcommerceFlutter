@@ -1,4 +1,3 @@
-
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -8,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../models/product_model.dart';
 import '../providers/auth_provider.dart';
 import '../providers/cart_provider.dart';
-import '../screens/product_detail_screen.dart';
+//import '../screens/product_detail_screen.dart';
 
 class ProductCard extends StatefulWidget {
   final Product product;
@@ -69,10 +68,11 @@ class _ProductCardState extends State<ProductCard> {
       ),
     );
   }
+
 // Redirección nativa leyendo el String real desde el documento de Mongoose
   void _openDetail(BuildContext context) {
-    final realSlug = widget.product.slug; 
-    
+    final realSlug = widget.product.slug;
+
     if (realSlug.isNotEmpty) {
       // Inyecta directamente la URL limpia en la raíz de Chrome
       Navigator.pushNamed(
@@ -81,7 +81,8 @@ class _ProductCardState extends State<ProductCard> {
       );
     } else {
       // Si no existe, no navegamos a una ruta inventada, reportamos el log técnico para corregir el producto
-      debugPrint("Error: El producto con ID ${widget.product.id} no posee la propiedad 'slug' migrada en el backend.");
+      debugPrint(
+          "Error: El producto con ID ${widget.product.id} no posee la propiedad 'slug' migrada en el backend.");
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Este producto está en mantenimiento de indexación.'),
@@ -247,7 +248,7 @@ class _ProductCardState extends State<ProductCard> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(_hover ? 0.10 : 0.06),
+                color: Colors.black.withValues(alpha: _hover ? 0.10 : 0.06),
                 blurRadius: _hover ? 24 : 16,
                 offset: Offset(0, _hover ? 12 : 8),
               ),
@@ -334,7 +335,7 @@ class _ProductCardState extends State<ProductCard> {
                   child: IgnorePointer(
                     ignoring: !_hover,
                     child: Container(
-                      color: Colors.black.withOpacity(0.20),
+                      color: Colors.black.withValues(alpha: 0.20),
                       child: BackdropFilter(
                         filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
                         child: Center(
@@ -464,7 +465,7 @@ class _NewBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.14),
+            color: Colors.black.withValues(alpha: 0.14),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
