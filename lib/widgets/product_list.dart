@@ -21,6 +21,7 @@ class _ProductListState extends State<ProductList> {
   final _nameCtrl = TextEditingController();
   final _nitCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final Map<String, bool> _expandedProjects = {};
   final Map<String, TextEditingController> _qtyControllers = {};
   bool _isSearchActive = false;
   late FocusNode _searchFocusNode;
@@ -797,6 +798,7 @@ class _ProductListState extends State<ProductList> {
               stock >= 0 ? stock : 9999; // si no sé stock, no bloqueo
 
           return Card(
+            key: ValueKey('cart_item_$productId'),
             margin: const EdgeInsets.symmetric(vertical: 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -942,41 +944,91 @@ class _ProductListState extends State<ProductList> {
                 ),
 
                 // Formulario exclusivo para administradores.
+
                 if (isAdmin && it.isProjectProduct)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                    ),
-                    child: ExpansionTile(
-                      key: PageStorageKey(
-                        'project_${it.productId}',
-                      ),
-                      initiallyExpanded:
-                          it.projectDetails == null || !it.isProjectValid,
-                      leading: const Icon(
-                        Icons.assignment_outlined,
-                        color: Colors.blueAccent,
-                      ),
-                      title: const Text(
-                        'Detalles del proyecto',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
+                  Builder(
+                    builder: (context) {
+                      final expanded = _expandedProjects.putIfAbsent(
+                        productId,
+                        () => it.projectDetails == null || !it.isProjectValid,
+                      );
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () {
+                                setState(() {
+                                  _expandedProjects[productId] = !expanded;
+                                });
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.assignment_outlined,
+                                      color: Colors.blueAccent,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          const Text(
+                                            'Detalles del proyecto',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            it.projectDetails == null
+                                                ? 'Pendiente de diligenciar'
+                                                : it.isProjectValid
+                                                    ? 'Abono: \$${formatCurrency(it.amountToCollect.round())}'
+                                                    : 'Información incompleta',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.blueGrey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    AnimatedRotation(
+                                      turns: expanded ? 0.5 : 0,
+                                      duration:
+                                          const Duration(milliseconds: 200),
+                                      child: const Icon(
+                                        Icons.keyboard_arrow_down,
+                                        color: Colors.blueGrey,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+
+                            // El formulario solo existe cuando está abierto.
+                            if (expanded)
+                              ProjectDetailsCard(
+                                key: ValueKey('details_$productId'),
+                                item: it,
+                              ),
+                          ],
                         ),
-                      ),
-                      subtitle: Text(
-                        it.projectDetails == null
-                            ? 'Pendiente de diligenciar'
-                            : it.isProjectValid
-                                ? 'Abono: \$${formatCurrency(it.amountToCollect.round())}'
-                                : 'Información incompleta',
-                      ),
-                      children: [
-                        ProjectDetailsCard(
-                          key: ValueKey(it.productId),
-                          item: it,
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
               ],
             ),
