@@ -18,7 +18,9 @@ class _CartSummaryState extends State<CartSummary> {
   bool _isCotizacionSelected = false;
 
   final TextEditingController _pagaConController = TextEditingController();
-
+  final _transferenciaController = TextEditingController();
+  String? _medioTransferencia;
+  bool _guardandoFactura = false;
   String formatCurrency(int value) {
     return value.toString().replaceAllMapped(
           RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
@@ -26,14 +28,20 @@ class _CartSummaryState extends State<CartSummary> {
         );
   }
 
-  double _parseMoney(String value) {
-    final cleaned = value.replaceAll(RegExp(r'[^0-9]'), '');
-    return double.tryParse(cleaned) ?? 0.0;
+  double? _parseMoney(String value) {
+    final input = value.trim();
+    final formatoValido = RegExp(r'^(?:[0-9]+|[0-9]{1,3}(?:\.[0-9]{3})+)$');
+    if (!formatoValido.hasMatch(input)) return null;
+
+    final pesos = int.tryParse(input.replaceAll('.', ''));
+    if (pesos == null || pesos > 9007199254740991) return null;
+    return pesos.toDouble();
   }
 
   @override
   void dispose() {
     _pagaConController.dispose();
+    _transferenciaController.dispose();
     super.dispose();
   }
 
@@ -105,6 +113,9 @@ class _CartSummaryState extends State<CartSummary> {
 
     final String? tokenNullable = authProvider.token;
     final bool isAuth = tokenNullable != null && tokenNullable.isNotEmpty;
+    final puedePagarMixto =
+        isAuth && authProvider.role == 'admin' && _isFacturaSelected;
+    final esMixto = puedePagarMixto && invoiceProvider.medioPago == 'Mixto';
 
     // =========================
     // Fuente unificada (guest + auth) para totales/selección
@@ -115,15 +126,26 @@ class _CartSummaryState extends State<CartSummary> {
       0.0,
       (sum, item) {
         if (item.isProjectProduct) {
-          return sum + (item.projectDetails?.advancePayment ?? 0.0);
+          return sum +
+              (item.projectDetails?.advancePayment ?? 0.0) * item.quantity;
         }
 
         return sum + item.effectivePrice * item.quantity;
       },
     );
 
-    final double pagaCon = _parseMoney(_pagaConController.text);
-    final double cambio = pagaCon - totalCobrar;
+    final efectivoIngresado = _parseMoney(_pagaConController.text);
+    final transferenciaIngresada = _parseMoney(_transferenciaController.text);
+    final pagaCon = efectivoIngresado ?? 0.0;
+    final valorTransferido = transferenciaIngresada ?? 0.0;
+    final transferenciaValida =
+        valorTransferido > 0 && valorTransferido < totalCobrar;
+
+    final efectivoPorCubrir = totalCobrar - (esMixto ? valorTransferido : 0.0);
+    final saldo = pagaCon - efectivoPorCubrir;
+    final mostrarCambioMixto =
+        transferenciaValida && efectivoIngresado != null && saldo > 0;
+    final double cambio = esMixto ? (mostrarCambioMixto ? saldo : 0.0) : saldo;
 
     return Container(
       padding: const EdgeInsets.all(16.0),
@@ -162,7 +184,7 @@ class _CartSummaryState extends State<CartSummary> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text('Paga con:'),
+              Text(esMixto ? 'Efectivo recibido:' : 'Paga con:'),
               SizedBox(
                 width: 120,
                 child: TextField(
@@ -170,7 +192,7 @@ class _CartSummaryState extends State<CartSummary> {
                   keyboardType: TextInputType.number,
                   textAlign: TextAlign.right,
                   onChanged: (value) {
-                    final double recibido = _parseMoney(value);
+                    final recibido = _parseMoney(value) ?? 0.0;
 
                     invoiceProvider.setPagaCon(recibido);
                   },
@@ -226,11 +248,41 @@ class _CartSummaryState extends State<CartSummary> {
             children: [
               _buildPaymentOption(invoiceProvider, 'Efectivo'),
               _buildPaymentOption(invoiceProvider, 'Nequi'),
-              _buildPaymentOption(invoiceProvider, 'Daviplata'),
+              _buildPaymentOption(invoiceProvider, 'Bre-B'),
               _buildPaymentOption(invoiceProvider, 'Bancolombia'),
+              if (puedePagarMixto)
+                _buildPaymentOption(invoiceProvider, 'Mixto'),
             ],
           ),
-
+          if (esMixto) ...[
+            const SizedBox(height: 12),
+            DropdownButton<String>(
+              isExpanded: true,
+              value: _medioTransferencia,
+              hint: const Text('Medio de transferencia'),
+              items: const [
+                DropdownMenuItem(value: 'Nequi', child: Text('Nequi')),
+                DropdownMenuItem(
+                    value: 'Bancolombia', child: Text('Bancolombia')),
+                DropdownMenuItem(value: 'Bre-B', child: Text('Llave')),
+              ],
+              onChanged: (medio) => setState(() => _medioTransferencia = medio),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _transferenciaController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Valor transferido',
+                prefixText: 'COP ',
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            if (valorTransferido > 0 && !transferenciaValida)
+              const Text('La transferencia debe ser menor que el total.'),
+            if (transferenciaValida && saldo < 0)
+              Text('Faltan COP ${formatCurrency((-saldo).round())}'),
+          ],
           const SizedBox(height: 20),
 
           // ==================== FACTURA / COTIZACIÓN ====================
@@ -250,6 +302,11 @@ class _CartSummaryState extends State<CartSummary> {
               Checkbox(
                 value: _isCotizacionSelected,
                 onChanged: (_) {
+                  if (invoiceProvider.medioPago == 'Mixto') {
+                    invoiceProvider.setMedioPago('Efectivo');
+                    _transferenciaController.clear();
+                    _medioTransferencia = null;
+                  }
                   setState(() {
                     _isCotizacionSelected = true;
                     _isFacturaSelected = false;
@@ -266,104 +323,165 @@ class _CartSummaryState extends State<CartSummary> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () async {
-                if (selectedUiItems.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('No hay productos seleccionados.')),
-                  );
-                  return;
-                }
+              onPressed: _guardandoFactura
+                  ? null
+                  : () async {
+                      if (selectedUiItems.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text('No hay productos seleccionados.')),
+                        );
+                        return;
+                      }
 
-                // snapshot selección
-                final selectedIds = cartProvider.selectedIds.toList();
+                      // snapshot selección
+                      final selectedIds = cartProvider.selectedIds.toList();
 
-                try {
-                  final role = authProvider.role;
-                  final token = authProvider.token ?? '';
-                  final isAdmin = role == 'admin';
-                  final isUserAuth = token.isNotEmpty && !isAdmin;
-                  final isGuest = token.isEmpty;
+                      try {
+                        final role = authProvider.role;
+                        final token = authProvider.token ?? '';
+                        final isAdmin = role == 'admin';
+                        final isUserAuth = token.isNotEmpty && !isAdmin;
+                        final isGuest = token.isEmpty;
 
-                  // ====== ARMAR MENSAJE WHATSAPP (sirve para guest y user) ======
-                  final message = _buildWhatsAppCartMessage(
-                    selectedUiItems: selectedUiItems,
-                    subtotal: subtotal,
-                    medioPago: invoiceProvider.medioPago,
-                  );
+                        // ====== ARMAR MENSAJE WHATSAPP (sirve para guest y user) ======
+                        final message = _buildWhatsAppCartMessage(
+                          selectedUiItems: selectedUiItems,
+                          subtotal: subtotal,
+                          medioPago: invoiceProvider.medioPago,
+                        );
 
-                  const phoneDigits = "573208576038";
+                        const phoneDigits = "573208576038";
 
-                  // ============================================================
-                  // 1) GUEST -> WhatsApp + limpia LOCAL
-                  // ============================================================
-                  if (isGuest) {
-                    await _launchWhatsAppWithCart(
-                      phoneDigits: phoneDigits,
-                      message: message,
-                    );
+                        // ============================================================
+                        // 1) GUEST -> WhatsApp + limpia LOCAL
+                        // ============================================================
+                        if (isGuest) {
+                          await _launchWhatsAppWithCart(
+                            phoneDigits: phoneDigits,
+                            message: message,
+                          );
 
-                    // borra lo comprado del local cart
-                    for (final id in selectedIds) {
-                      await cartProvider.removeLocal(id);
-                    }
-                    cartProvider.clearSelection();
-                    _pagaConController.clear();
-                    return;
-                  }
+                          // borra lo comprado del local cart
+                          for (final id in selectedIds) {
+                            await cartProvider.removeLocal(id);
+                          }
+                          cartProvider.clearSelection();
+                          _pagaConController.clear();
+                          return;
+                        }
 
-                  // ============================================================
-                  // 2) ADMIN -> Backend + PDF (o solo PDF) + limpia LOCAL
-                  // ============================================================
-                  if (isAdmin) {
-                    final double recibido =
-                        _parseMoney(_pagaConController.text);
+                        // ============================================================
+                        // 2) ADMIN -> Backend + PDF (o solo PDF) + limpia LOCAL
+                        // ============================================================
+                        if (isAdmin) {
+                          if (_guardandoFactura) return;
 
-                    invoiceProvider.updateTotals(totalCobrar);
-                    invoiceProvider.setPagaCon(recibido);
-                    if (_isFacturaSelected) {
-                      await invoiceProvider
-                          .createInvoiceFromUiSelection(context);
-                    } else {
-                      await invoiceProvider.generatePdfFromUiSelection(context);
-                    }
+                          if (_isFacturaSelected) {
+                            final tieneProyecto = selectedUiItems
+                                .any((item) => item.isProjectProduct);
+                            final esEfectivo =
+                                invoiceProvider.medioPago == 'Efectivo';
+                            final requiereEfectivo =
+                                esMixto || (esEfectivo && !tieneProyecto);
+                            final efectivoInvalido = efectivoIngresado ==
+                                    null &&
+                                (requiereEfectivo ||
+                                    _pagaConController.text.trim().isNotEmpty);
 
-                    // admin trabaja con carrito local
-                    for (final id in selectedIds) {
-                      await cartProvider.removeLocal(id);
-                    }
-                    cartProvider.clearSelection();
-                    _pagaConController.clear();
-                    return;
-                  }
+                            if (efectivoInvalido ||
+                                (esMixto && transferenciaIngresada == null)) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'Revisa los importes. Escribe 50000 o 50.000.'),
+                                ),
+                              );
+                              return;
+                            }
 
-                  // ============================================================
-                  // 3) USER auth -> WhatsApp (NO backend) + (opcional limpiar remoto)
-                  // ============================================================
-                  if (isUserAuth) {
-                    await _launchWhatsAppWithCart(
-                      phoneDigits: phoneDigits,
-                      message: message,
-                    );
+                            if (esEfectivo &&
+                                !tieneProyecto &&
+                                pagaCon < totalCobrar) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                      'El efectivo recibido no cubre el total.'),
+                                ),
+                              );
+                              return;
+                            }
+                          }
 
-                    // ✅ RECOMENDADO: NO limpiar remoto, porque aún no se pagó
-                    // Si IGUAL quieres limpiar después de enviar:
-                    /*
+                          setState(() => _guardandoFactura = true);
+
+                          try {
+                            invoiceProvider.updateTotals(totalCobrar);
+                            invoiceProvider.setPagaCon(pagaCon);
+
+                            if (_isFacturaSelected) {
+                              final guardada = await invoiceProvider
+                                  .createInvoiceFromUiSelection(
+                                context,
+                                medioTransferencia:
+                                    esMixto ? _medioTransferencia : null,
+                                valorTransferido:
+                                    esMixto ? valorTransferido : 0.0,
+                              );
+
+                              if (!guardada) return;
+                            } else {
+                              await invoiceProvider
+                                  .generatePdfFromUiSelection(context);
+                            }
+
+                            for (final id in selectedIds) {
+                              await cartProvider.removeLocal(id);
+                            }
+                            cartProvider.clearSelection();
+
+                            if (mounted) {
+                              _pagaConController.clear();
+                              _transferenciaController.clear();
+                              _medioTransferencia = null;
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() => _guardandoFactura = false);
+                            }
+                          }
+
+                          return;
+                        }
+
+                        // ============================================================
+                        // 3) USER auth -> WhatsApp (NO backend) + (opcional limpiar remoto)
+                        // ============================================================
+                        if (isUserAuth) {
+                          await _launchWhatsAppWithCart(
+                            phoneDigits: phoneDigits,
+                            message: message,
+                          );
+
+                          // ✅ RECOMENDADO: NO limpiar remoto, porque aún no se pagó
+                          // Si IGUAL quieres limpiar después de enviar:
+                          /*
       for (final id in selectedIds) {
         await cartProvider.removeItem(token, productId: id);
       }
       */
 
-                    cartProvider.clearSelection();
-                    _pagaConController.clear();
-                    return;
-                  }
-                } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
-              },
+                          cartProvider.clearSelection();
+                          _pagaConController.clear();
+                          return;
+                        }
+                      } catch (e) {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Error: $e')),
+                        );
+                      }
+                    },
               child: const Text('Continuar'),
             ),
           ),

@@ -1,6 +1,27 @@
-
 import '../models/product_model.dart';
 import '../models/user_model.dart';
+
+class InvoicePayment {
+  final String medio;
+  final double monto;
+
+  const InvoicePayment({
+    required this.medio,
+    required this.monto,
+  });
+
+  factory InvoicePayment.fromJson(Map<String, dynamic> json) {
+    return InvoicePayment(
+      medio: json['medio'] as String,
+      monto: (json['monto'] as num).toDouble(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'medio': medio,
+        'monto': monto,
+      };
+}
 
 class Invoice {
   final String id;
@@ -14,6 +35,7 @@ class Invoice {
   final int? consecutivo;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final List<InvoicePayment> pagos;
 
   Invoice({
     required this.id,
@@ -24,6 +46,7 @@ class Invoice {
     required this.medioPago,
     required this.pagaCon,
     required this.cambio,
+    this.pagos = const [],
     this.consecutivo,
     required this.createdAt,
     required this.updatedAt,
@@ -66,6 +89,11 @@ class Invoice {
       pagaCon: (json['pagaCon'] as num?)?.toDouble() ?? 0.0,
       cambio: (json['cambio'] as num?)?.toDouble() ?? 0.0,
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0.0,
+      pagos: (json['pagos'] as List<dynamic>? ?? const [])
+          .map((pago) => InvoicePayment.fromJson(
+                Map<String, dynamic>.from(pago as Map),
+              ))
+          .toList(),
       consecutivo: (json['consecutivo'] is int)
           ? json['consecutivo'] as int
           : int.tryParse(json['consecutivo']?.toString() ?? ''),
@@ -119,6 +147,8 @@ class Invoice {
       'medioPago': medioPago,
       'pagaCon': pagaCon,
       'cambio': cambio,
+      if (pagos.isNotEmpty)
+        'pagos': pagos.map((pago) => pago.toJson()).toList(),
       'consecutivo': consecutivo,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
@@ -133,6 +163,7 @@ class Invoice {
     double? totalAmount,
     String? medioPago,
     double? pagaCon,
+    List<InvoicePayment>? pagos,
     double? cambio,
     int? consecutivo,
     DateTime? createdAt,
@@ -145,11 +176,43 @@ class Invoice {
       products: products ?? this.products,
       totalAmount: totalAmount ?? this.totalAmount,
       medioPago: medioPago ?? this.medioPago,
+      pagos: pagos ?? this.pagos,
       pagaCon: pagaCon ?? this.pagaCon,
       cambio: cambio ?? this.cambio,
       consecutivo: consecutivo ?? this.consecutivo,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
+  }
+
+  static String _normalizarMedio(String medio) {
+    final valor = medio.trim().toLowerCase();
+
+    if (valor == 'llave' || valor == 'bre-b' || valor == 'bre-b/llave') {
+      return 'bre-b';
+    }
+
+    if (valor == 'daviplata' || valor == 'daviplatá') {
+      return 'daviplata';
+    }
+
+    return valor;
+  }
+
+  double montoPorMedio(String medio) {
+    final medioBuscado = _normalizarMedio(medio);
+
+    if (pagos.isNotEmpty) {
+      return pagos.fold<double>(0.0, (suma, pago) {
+        return _normalizarMedio(pago.medio) == medioBuscado
+            ? suma + pago.monto
+            : suma;
+      });
+    }
+
+    final medioOriginal = _normalizarMedio(medioPago);
+    return medioOriginal != 'mixto' && medioOriginal == medioBuscado
+        ? totalAmount
+        : 0.0;
   }
 }

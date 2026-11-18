@@ -41,6 +41,15 @@ class InvoiceProvider with ChangeNotifier {
   double get cambio => _cambio;
   List<Invoice> get invoices => _invoices;
   List<Invoice> get todaysSales => _todaysSales;
+  double get totalVentasHoy => _todaysSales.fold<double>(
+        0.0,
+        (suma, factura) => suma + factura.totalAmount,
+      );
+
+  double totalHoyPorMedio(String medio) => _todaysSales.fold<double>(
+        0.0,
+        (suma, factura) => suma + factura.montoPorMedio(medio),
+      );
   Set<String> get selectedProductIds => _selectedProductIds;
   double get subtotal => _subtotal;
 
@@ -555,138 +564,201 @@ class InvoiceProvider with ChangeNotifier {
     );
   }
 
-  Future<void> createInvoiceFromUiSelection(
+  Future<bool> createInvoiceFromUiSelection(
     BuildContext context, {
     String docType = 'FACTURA DE COMPRA',
+    String? medioTransferencia,
+    double valorTransferido = 0.0,
   }) async {
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final isAdmin = authProvider.role == 'admin';
+    final authProvider = context.read<AuthProvider>();
+    final cartProvider = context.read<CartProvider>();
 
-    // ✅ SOLO ADMIN ENVÍA AL BACKEND
-    if (!isAdmin) {
+    void mostrarMensaje(String mensaje) {
+      if (!context.mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Solo el admin puede facturar.")),
+        SnackBar(content: Text(mensaje)),
       );
-      return;
     }
 
-    final cartProvider = Provider.of<CartProvider>(context, listen: false);
-    final selected = cartProvider.selectedUiItems;
+    if (authProvider.role != 'admin') {
+      mostrarMensaje('Solo el admin puede facturar.');
+      return false;
+    }
+
+    final selected = cartProvider.selectedUiItems.toList();
 
     if (selected.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No has seleccionado productos.")),
-      );
-      return;
+      mostrarMensaje('No has seleccionado productos.');
+      return false;
     }
 
-    final int consecutivo = await _invoiceService.fetchNextConsecutive();
+    final cliente = _currentUser;
+    final medioPago = _medioPago;
+    final efectivoRecibido = _pagaCon;
+    final esMixto = medioPago == 'Mixto';
+    final projectItems =
+        selected.where((item) => item.isProjectProduct).toList();
+    final tieneProyecto = projectItems.isNotEmpty;
 
-    final payloadProducts = selected.map((it) {
-      final double unitPrice = it.isProjectProduct
-          ? (it.projectDetails?.advancePayment ?? 0.0)
-          : it.effectivePrice;
+    var totalAmount = 0.0;
+    final payloadProducts = <Map<String, dynamic>>[];
 
-      return {
-        "productId": it.productId,
-        "quantity": it.quantity,
-        "appliedPrice": unitPrice,
-      };
-    }).toList();
+    for (final item in selected) {
+      final precioCobrado = item.isProjectProduct
+          ? (item.projectDetails?.advancePayment ?? 0.0)
+          : item.effectivePrice;
 
-    final double totalAmount = payloadProducts.fold<double>(
-      0.0,
-      (sum, p) {
-        final qty = (p["quantity"] as num?)?.toDouble() ?? 0.0;
-        final price = (p["appliedPrice"] as num?)?.toDouble() ?? 0.0;
-        return sum + (qty * price);
-      },
-    );
-    // Total que realmente se debe cobrar.
-    final double totalCobrar = totalAmount;
+      totalAmount += precioCobrado * item.quantity;
 
-// Valor entregado por el cliente.
-// Para efectivo se usa el monto registrado;
-// para otros medios, el pago normalmente es exacto.
-    // Identificar si la factura contiene Servicio o Impresión 3D.
-    final bool tieneProyecto = selected.any(
-      (item) => item.isProjectProduct,
-    );
+      payloadProducts.add({
+        'productId': item.productId,
+        'quantity': item.quantity,
+        'appliedPrice': precioCobrado,
+      });
+    }
 
-// En proyectos, el abono ya representa dinero recibido.
-// En ventas normales, se conserva el valor ingresado en "Paga con".
-    final double pagoRecibido = tieneProyecto ? totalCobrar : _pagaCon;
+    var pagoRecibido = tieneProyecto ? totalAmount : efectivoRecibido;
+    var cambioCalculado = !tieneProyecto && medioPago == 'Efectivo'
+        ? (efectivoRecibido - totalAmount)
+            .clamp(0.0, double.infinity)
+            .toDouble()
+        : 0.0;
 
-// Los proyectos no generan cambio adicional por el abono.
-    final double cambioCalculado = tieneProyecto
-        ? 0.0
-        : (_medioPago == 'Efectivo'
-            ? (pagoRecibido - totalCobrar)
-                .clamp(0.0, double.infinity)
-                .toDouble()
-            : 0.0);
+    final pagos = <InvoicePayment>[];
+
+    if (esMixto) {
+      final transferencia = medioTransferencia;
+      const mediosPermitidos = {'Nequi', 'Bancolombia', 'Bre-B'};
+
+      if (transferencia == null || !mediosPermitidos.contains(transferencia)) {
+        mostrarMensaje('Selecciona el medio de transferencia.');
+        return false;
+      }
+
+      bool esMontoValido(double monto) =>
+          monto.isFinite &&
+          monto >= 0 &&
+          monto <= 9007199254740991 &&
+          monto == monto.truncateToDouble();
+
+      final totalRecibido = efectivoRecibido + valorTransferido;
+
+      if (!esMontoValido(totalAmount) ||
+          !esMontoValido(efectivoRecibido) ||
+          !esMontoValido(valorTransferido) ||
+          !esMontoValido(totalRecibido)) {
+        mostrarMensaje('Ingresa valores válidos en pesos enteros.');
+        return false;
+      }
+
+      if (valorTransferido <= 0 || valorTransferido >= totalAmount) {
+        mostrarMensaje(
+            'La transferencia debe ser mayor a cero y menor al total.');
+        return false;
+      }
+
+      final efectivoAplicado = totalAmount - valorTransferido;
+
+      if (efectivoRecibido < efectivoAplicado) {
+        mostrarMensaje('El efectivo recibido no cubre el saldo de la factura.');
+        return false;
+      }
+
+      pagoRecibido = totalRecibido;
+      cambioCalculado = efectivoRecibido - efectivoAplicado;
+
+      pagos.addAll([
+        InvoicePayment(medio: 'Efectivo', monto: efectivoAplicado),
+        InvoicePayment(medio: transferencia, monto: valorTransferido),
+      ]);
+    }
+
     final payload = {
-      "name": _currentUser?.name ?? "Cliente",
-      "phone": _currentUser?.phone ?? "",
-      "email": _currentUser?.email ?? "",
-      "cc": _currentUser?.nit ?? "",
-      "products": payloadProducts,
-      "medioPago": _medioPago,
-      "pagaCon": pagoRecibido,
-      "cambio": cambioCalculado,
-      "totalAmount": totalAmount,
-      "consecutivo": consecutivo
+      'name': cliente?.name ?? 'Cliente',
+      'phone': cliente?.phone ?? '',
+      'email': cliente?.email ?? '',
+      'cc': cliente?.nit ?? '',
+      'products': payloadProducts,
+      'medioPago': medioPago,
+      'pagaCon': pagoRecibido,
+      'cambio': cambioCalculado,
+      'totalAmount': totalAmount,
+      if (esMixto) 'pagos': pagos.map((pago) => pago.toJson()).toList(),
     };
 
-    final resp = await http.post(
-      Uri.parse(_baseUrl),
-      headers: {"Content-Type": "application/json"},
-      body: jsonEncode(payload),
-    );
+    final http.Response respuesta;
 
-    if (resp.statusCode >= 200 && resp.statusCode < 300) {
-      // PDF usando effectivePrice
-      final productsForPdf = selected.map((it) {
+    try {
+      respuesta = await http.post(
+        Uri.parse(_baseUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(payload),
+      );
+    } catch (error) {
+      debugPrint('Error al enviar la factura: $error');
+      mostrarMensaje(
+          'No se confirmó el guardado. Revisa Ventas Hoy antes de reintentar.');
+      return false;
+    }
+
+    if (respuesta.statusCode < 200 || respuesta.statusCode >= 300) {
+      debugPrint('POST newBill: ${respuesta.statusCode} ${respuesta.body}');
+      mostrarMensaje('No se confirmó el guardado (${respuesta.statusCode}).');
+      return false;
+    }
+
+    // A partir de aquí, el servidor ya confirmó que guardó la factura.
+    try {
+      final body = jsonDecode(respuesta.body) as Map<String, dynamic>;
+      final data = body['data'] as Map<String, dynamic>;
+      final consecutivo = (data['consecutivo'] as num).toInt();
+
+      final productsForPdf = selected.map((item) {
         return Product(
-          id: it.productId,
-          name: it.name,
-          price: it.effectivePrice, // ✅ correcto
-          description:
-              it.isProjectProduct ? (it.projectDetails?.description ?? '') : '',
+          id: item.productId,
+          name: item.name,
+          price: item.effectivePrice,
+          description: item.isProjectProduct
+              ? (item.projectDetails?.description ?? '')
+              : '',
           stock: 0,
           category: '',
-          images: it.image.isNotEmpty ? [it.image] : [],
-          quantity: it.quantity,
+          images: item.image.isNotEmpty ? [item.image] : [],
+          quantity: item.quantity,
         );
       }).toList();
 
+      final ahora = DateTime.now();
       final invoice = Invoice(
-        id: "inv-$consecutivo",
-        user: _currentUser,
+        id: data['_id']?.toString() ?? 'inv-$consecutivo',
+        user: cliente,
         products: productsForPdf,
         totalAmount: totalAmount,
-        medioPago: _medioPago,
+        medioPago: medioPago,
         pagaCon: pagoRecibido,
         cambio: cambioCalculado,
+        pagos: pagos,
         consecutivo: consecutivo,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+        createdAt: ahora,
+        updatedAt: ahora,
       );
 
       await PDFService().printInvoiceStyled(
         invoice,
         docType: docType,
-        projectItems: selected.where((it) => it.isProjectProduct).toList(),
+        projectItems: projectItems,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Factura #$consecutivo creada correctamente")),
-      );
-
-      clearSelections();
-    } else {
-      debugPrint("POST newBill failed: ${resp.statusCode} ${resp.body}");
+      mostrarMensaje('Factura #$consecutivo guardada correctamente.');
+    } catch (error) {
+      debugPrint('Error al preparar o imprimir el PDF: $error');
+      mostrarMensaje(
+          'La factura se guardó, pero no se pudo generar o imprimir el PDF.');
     }
+
+    clearSelections();
+    return true;
   }
 
   // ========================= LIMPIEZA =========================

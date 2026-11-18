@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+/*import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/invoice_provider.dart';
@@ -95,6 +95,83 @@ class SalesFooter extends StatelessWidget {
             text: '\$${_formatCurrency(amount)}',
             style: const TextStyle(fontWeight: FontWeight.normal),
           ),
+        ],
+      ),
+    );
+  }
+}*/
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../providers/invoice_provider.dart';
+
+class SalesFooter extends StatelessWidget {
+  const SalesFooter({Key? key}) : super(key: key);
+
+  String _formatCurrency(int value) {
+    return value.toString().replaceAllMapped(
+          RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+          (match) => '${match[1]}.',
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<InvoiceProvider>(
+      builder: (context, invoiceProvider, child) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Colors.blue,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(10),
+              topRight: Radius.circular(10),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 16,
+            runSpacing: 8,
+            children: [
+              _buildFooterItem('Total Día', invoiceProvider.totalVentasHoy),
+              _buildFooterItem(
+                'Efectivo',
+                invoiceProvider.totalHoyPorMedio('Efectivo'),
+              ),
+              _buildFooterItem(
+                'Nequi',
+                invoiceProvider.totalHoyPorMedio('Nequi'),
+              ),
+              _buildFooterItem(
+                'Daviplata',
+                invoiceProvider.totalHoyPorMedio('Daviplata'),
+              ),
+              _buildFooterItem(
+                'Bancolombia',
+                invoiceProvider.totalHoyPorMedio('Bancolombia'),
+              ),
+              _buildFooterItem(
+                'Llave',
+                invoiceProvider.totalHoyPorMedio('Bre-B'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildFooterItem(String label, double amount) {
+    return RichText(
+      text: TextSpan(
+        style: const TextStyle(fontSize: 16, color: Colors.white),
+        children: [
+          TextSpan(
+            text: '$label: ',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+          TextSpan(text: '\$${_formatCurrency(amount.round())}'),
         ],
       ),
     );
